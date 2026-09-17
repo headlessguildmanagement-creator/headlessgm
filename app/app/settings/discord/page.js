@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
+import { resolveGuild, withGuild } from '../../../../lib/guild-context'
 import { getDiscordInstallUrl, listBotGuilds, listGuildTextChannels } from '../../../../lib/discord/server'
 import AppShell from '../../../../components/app-shell'
 import { provisionDiscordWorkspace, publishHeadlessGMControlPanel, reconnectDiscord, saveDiscordConnection, sendDiscordTestMessage } from './actions'
@@ -12,7 +13,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id').limit(1).maybeSingle()
+  const guild = await resolveGuild(supabase, params?.guild, 'id, name, slug, owner_user_id')
   if (!guild) redirect('/app/onboarding')
 
   const isOwner = guild.owner_user_id === userId
@@ -40,7 +41,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
   }
 
   return (
-    <AppShell guildName={guild.name} title="Discord" activeHref="/app/settings/discord">
+    <AppShell guildName={guild.name} guildSlug={guild.slug} title="Discord" activeHref="/app/settings/discord">
       {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
       {params?.success ? <div className="notice success">{String(params.success)}</div> : null}
       {discordLoadError ? <div className="notice error">{discordLoadError}</div> : null}
@@ -113,7 +114,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {isOwner ? <form action={sendDiscordTestMessage}><input type="hidden" name="guild_id" value={guild.id} /><button type="submit" className="button ghost">Send test message</button></form> : null}
             <form action={publishHeadlessGMControlPanel}><input type="hidden" name="guild_id" value={guild.id} /><button type="submit" className="button">Publish #headlessgm control panel</button></form>
-            <Link href={`/app/settings/discord/claims?guild=${encodeURIComponent(guild.id)}`} className="button ghost">Review character claims</Link>
+            <Link href={`${withGuild('/app/settings/discord/claims', guild.slug)}?guild=${encodeURIComponent(guild.id)}`} className="button ghost">Review character claims</Link>
           </div>
         </section>
       ) : null}
