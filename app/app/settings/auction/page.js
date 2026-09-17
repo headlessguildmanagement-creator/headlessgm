@@ -1,9 +1,7 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
+import AppShell from '../../../../components/app-shell'
 import { saveAuctionRules } from './actions'
-
-const field = { border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px', width: '100%' }
 
 export default async function AuctionSettingsPage({ searchParams }) {
   const params = await searchParams
@@ -27,66 +25,42 @@ export default async function AuctionSettingsPage({ searchParams }) {
     .eq('guild_id', guild.id)
     .maybeSingle()
 
+  const commander = guild.plan_code === 'commander' || guild.plan_code === 'beta'
+
   return (
-    <main style={{ minHeight: '100vh', padding: '40px 24px 72px' }}>
-      <div style={{ width: 'min(900px, 100%)', margin: '0 auto', display: 'grid', gap: 24 }}>
-        <header>
-          <Link href="/app" style={{ color: '#8893a1', textDecoration: 'none' }}>← Dashboard</Link>
-          <p className="eyebrow" style={{ marginTop: 20 }}>{guild.name}</p>
-          <h1 style={{ fontSize: 48, lineHeight: 1 }}>Auction Rules</h1>
-          <p className="lede">These are the guild defaults. Every auction run snapshots the rules it starts with, so changing settings later never changes historical auctions.</p>
-        </header>
+    <AppShell guildName={guild.name} title="Auction Rules" activeHref="/app/settings/auction">
+      {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
+      {params?.success ? <div className="notice success">{String(params.success)}</div> : null}
 
-        {params?.error ? <div style={{ border: '1px solid #7f1d1d', borderRadius: 12, padding: 14, color: '#fca5a5' }}>{String(params.error)}</div> : null}
-        {params?.success ? <div style={{ border: '1px solid #14532d', borderRadius: 12, padding: 14, color: '#86efac' }}>{String(params.success)}</div> : null}
+      <form action={saveAuctionRules} style={{ display: 'grid', gap: 18 }}>
+        <input type="hidden" name="guild_id" value={guild.id} />
 
-        <form action={saveAuctionRules} style={{ display: 'grid', gap: 20 }}>
-          <input type="hidden" name="guild_id" value={guild.id} />
-
-          <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 22, background: '#11151a', display: 'grid', gap: 16 }}>
-            <div><strong>Feather allocation</strong><p style={{ color: '#8893a1', margin: '6px 0 0' }}>Determines the eligible pool before per-person caps are applied.</p></div>
-            <select name="feather_mode" defaultValue={rules?.feather_mode || 'ffa'} style={field}>
-              <option value="ffa">Free For All</option>
-              <option value="four_group">4 Group Rotation</option>
-              <option value="random">Random among eligible members</option>
-              <option value="custom" disabled>Custom — COMMANDER</option>
-            </select>
-          </section>
-
-          <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 22, background: '#11151a', display: 'grid', gap: 16 }}>
-            <div><strong>Puppet allocation</strong><p style={{ color: '#8893a1', margin: '6px 0 0' }}>Round Robin is persistent across events. New members are appended to the queue.</p></div>
-            <select name="puppet_mode" defaultValue={rules?.puppet_mode || 'round_robin'} style={field}>
-              <option value="ffa">Free For All</option>
-              <option value="round_robin">Round Robin</option>
-              <option value="random">Random among eligible members</option>
-              <option value="custom" disabled>Custom — COMMANDER</option>
-            </select>
-          </section>
-
-          <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 22, background: '#11151a', display: 'grid', gap: 16 }}>
-            <div>
-              <strong>Per-person caps</strong>
-              <p style={{ color: '#8893a1', margin: '6px 0 0' }}>Applied before Random/FFA/group/queue allocation and enforced again when allocations are written. Leave blank for no configured limit.</p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
-              <label style={{ display: 'grid', gap: 7 }}><span>Light / Dark Feather</span><input name="light_dark_feather_cap" type="number" min="0" step="1" defaultValue={rules?.light_dark_feather_cap ?? ''} placeholder="Unlimited" style={field} /></label>
-              <label style={{ display: 'grid', gap: 7 }}><span>Time / Space Feather</span><input name="time_space_feather_cap" type="number" min="0" step="1" defaultValue={rules?.time_space_feather_cap ?? ''} placeholder="Unlimited" style={field} /></label>
-              <label style={{ display: 'grid', gap: 7 }}><span>Puppet Fragments</span><input name="puppet_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.puppet_fragment_cap ?? ''} placeholder="Unlimited" style={field} /></label>
-              <label style={{ display: 'grid', gap: 7 }}><span>Illusion Fragments</span><input name="illusion_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.illusion_fragment_cap ?? ''} placeholder="Unlimited" style={field} /></label>
-            </div>
-          </section>
-
-          <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 22, background: '#11151a' }}>
-            <strong>How Random works</strong>
-            <p style={{ color: '#8893a1', lineHeight: 1.6, marginBottom: 0 }}>HeadlessGM first removes members who are unavailable or otherwise ineligible, then removes members who have reached the configured cap for that reward category, and only then randomizes among the remaining eligible members.</p>
-          </section>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <span style={{ color: '#727d8c', fontSize: 13 }}>Rule version {rules?.version || 1}</span>
-            <button type="submit" style={{ border: 0, borderRadius: 10, padding: '12px 18px', fontWeight: 800, cursor: 'pointer' }}>Save auction rules</button>
+        <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Allocation presets</h2><p>Choose how eligibility is organized before caps are applied.</p></div><span className="pill">Rule version {rules?.version || 1}</span></div>
+          <div className="form-grid">
+            <label className="field"><span>Feather allocation</span><select name="feather_mode" defaultValue={rules?.feather_mode || 'ffa'}><option value="ffa">Free For All</option><option value="four_group">4 Group Rotation</option><option value="random">Random among eligible members</option><option value="custom" disabled={!commander}>Custom — COMMANDER</option></select></label>
+            <label className="field"><span>Puppet allocation</span><select name="puppet_mode" defaultValue={rules?.puppet_mode || 'round_robin'}><option value="ffa">Free For All</option><option value="round_robin">Round Robin</option><option value="random">Random among eligible members</option><option value="custom" disabled={!commander}>Custom — COMMANDER</option></select></label>
           </div>
-        </form>
-      </div>
-    </main>
+          {!commander ? <p className="muted" style={{ marginBottom: 0 }}>Custom allocation logic is available on COMMANDER. Standard presets remain editable here.</p> : null}
+        </section>
+
+        <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Per-person reward caps</h2><p>Random, FFA, group allocation and queue logic all filter against these limits before assigning rewards.</p></div></div>
+          <div className="form-grid">
+            <label className="field"><span>Light / Dark Feather</span><input name="light_dark_feather_cap" type="number" min="0" step="1" defaultValue={rules?.light_dark_feather_cap ?? ''} placeholder="Unlimited" /></label>
+            <label className="field"><span>Time / Space Feather</span><input name="time_space_feather_cap" type="number" min="0" step="1" defaultValue={rules?.time_space_feather_cap ?? ''} placeholder="Unlimited" /></label>
+            <label className="field"><span>Puppet Fragments</span><input name="puppet_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.puppet_fragment_cap ?? ''} placeholder="Unlimited" /></label>
+            <label className="field"><span>Illusion Fragments</span><input name="illusion_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.illusion_fragment_cap ?? ''} placeholder="Unlimited" /></label>
+          </div>
+        </section>
+
+        <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Random allocation order</h2><p>This is deterministic in rules, not in winner choice.</p></div></div>
+          <div className="table-wrap"><table><thead><tr><th>Step</th><th>Rule</th></tr></thead><tbody><tr><td>1</td><td>Start with the event-eligible members for that reward.</td></tr><tr><td>2</td><td>Remove LOA, no-show, unavailable or reward-ineligible members.</td></tr><tr><td>3</td><td>Remove anyone already at the configured category cap.</td></tr><tr><td>4</td><td>Randomize only within the remaining eligible pool.</td></tr><tr><td>5</td><td>Enforce the cap again when allocations are written.</td></tr></tbody></table></div>
+        </section>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="submit" className="button">Save auction rules</button></div>
+      </form>
+    </AppShell>
   )
 }

@@ -1,9 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase/server'
+import AppShell from '../../components/app-shell'
 import { signOut } from './actions'
-
-const card = { color: 'inherit', textDecoration: 'none', border: '1px solid #303742', borderRadius: 16, padding: 22, background: '#11151a' }
 
 export default async function AppHome() {
   const supabase = await createClient()
@@ -19,49 +18,66 @@ export default async function AppHome() {
   const guild = guildRows?.[0]
   if (!guild) redirect('/app/onboarding')
 
-  const [{ data: plan }, { data: preset }, activeMembers, pendingMembers, openApps, upcomingEvents] = await Promise.all([
+  const [{ data: plan }, { data: preset }, activeMembers, pendingMembers, openApps, upcomingEvents, { data: discord }] = await Promise.all([
     supabase.from('plans').select('display_name, active_member_limit').eq('code', guild.plan_code).single(),
     supabase.from('game_presets').select('name, raid_size, party_size, parties_per_raid').eq('id', guild.game_preset_id).single(),
     supabase.from('guild_members').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).eq('status', 'active'),
     supabase.from('guild_members').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).eq('status', 'pending'),
     supabase.from('guild_applications').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).not('status', 'in', '(rejected,joined)'),
     supabase.from('guild_events').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).not('status', 'in', '(completed,cancelled)'),
+    supabase.from('discord_connections').select('discord_guild_name, metadata, bot_installed').eq('guild_id', guild.id).maybeSingle(),
   ])
 
   const activeCount = activeMembers.count ?? 0
-  const pendingCount = pendingMembers.count ?? 0
   const activeLimit = plan?.active_member_limit ?? 80
-
-  const cards = [
-    ['RECRUITMENT', 'Applicants', `${openApps.count ?? 0} open applications · public page /${guild.slug}/apply`, '/app/recruitment'],
-    ['ROSTER', 'Members', 'Authoritative in-game roster and Discord identity links.', '/app/members'],
-    ['OPERATIONS', 'Events', `${upcomingEvents.count ?? 0} active/upcoming events · LOA → eligibility → lineup`, '/app/events'],
-    ['AUCTION', 'Rules & Caps', 'Feather and Puppet presets plus per-person reward limits.', '/app/settings/auction'],
-    ['DISCORD', 'Control Panel', 'Connect the server, publish member controls, and review character claims.', '/app/settings/discord'],
+  const operations = [
+    ['Events & Attendance', `${upcomingEvents.count ?? 0} active/upcoming events. LOA, availability and event state live here.`, '/app/events'],
+    ['Lineup Builder', `${preset?.raid_size || 40}-player Main · ${preset?.parties_per_raid || 8} parties × ${preset?.party_size || 5}.`, '/app/events'],
+    ['Auction Rules', 'Feather and Puppet presets, Random eligibility and per-person caps.', '/app/settings/auction'],
+    ['Recruitment', `${openApps.count ?? 0} open applications · public application page /${guild.slug}/apply`, '/app/recruitment'],
+    ['Members', `${activeCount} active · ${pendingMembers.count ?? 0} pending. Persistent identity and Discord links.`, '/app/members'],
+    ['Discord', discord?.bot_installed ? `Connected to ${discord.discord_guild_name}${discord.metadata?.channel_name ? ` · #${discord.metadata.channel_name}` : ''}` : 'Not connected. Install or reconnect HeadlessGM and choose its channel.', '/app/settings/discord'],
   ]
 
+  const actions = <form action={signOut}><button type="submit" className="button ghost">Sign out</button></form>
+
   return (
-    <main style={{ minHeight: '100vh', padding: '36px 24px 64px' }}>
-      <div style={{ width: 'min(1040px, 100%)', margin: '0 auto', display: 'grid', gap: 28 }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <p className="eyebrow">HeadlessGM · {preset?.name || 'Guild Operations'}</p>
-            <h1 style={{ fontSize: 56, lineHeight: 1, letterSpacing: '-0.05em' }}>{guild.name}</h1>
-            <p className="lede" style={{ fontSize: 18, marginTop: 16 }}>Recruit → onboard → operate → finalize → remember.</p>
-          </div>
-          <form action={signOut}><button type="submit" style={{ padding: '10px 14px', borderRadius: 10, cursor: 'pointer' }}>Sign out</button></form>
-        </header>
+    <AppShell guildName={guild.name} title="Guild overview" activeHref="/app" actions={actions}>
+      <section className="stats">
+        <div className="stat"><label>ACTIVE ROSTER</label><strong>{activeCount} / {activeLimit}</strong><small>{pendingMembers.count ?? 0} pending</small></div>
+        <div className="stat"><label>UPCOMING / ACTIVE EVENTS</label><strong>{upcomingEvents.count ?? 0}</strong><small>LOA → lineup → auction</small></div>
+        <div className="stat"><label>OPEN APPLICATIONS</label><strong>{openApps.count ?? 0}</strong><small>Recruitment queue</small></div>
+        <div className="stat"><label>PLAN</label><strong>{plan?.display_name || 'BETA'}</strong><small>{guild.slug} · {guild.timezone}</small></div>
+      </section>
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
-          <div style={{ border: '1px solid #232832', borderRadius: 16, padding: 20, background: '#11151a' }}><div style={{ color: '#8893a1', fontSize: 13 }}>ACTIVE ROSTER</div><div style={{ marginTop: 8, fontSize: 34, fontWeight: 800 }}>{activeCount} / {activeLimit}</div><div style={{ color: '#727d8c', fontSize: 13 }}>{pendingCount} pending</div></div>
-          <div style={{ border: '1px solid #232832', borderRadius: 16, padding: 20, background: '#11151a' }}><div style={{ color: '#8893a1', fontSize: 13 }}>LINEUP PRESET</div><div style={{ marginTop: 8, fontSize: 20, fontWeight: 800 }}>{preset?.raid_size || 40}-player Main</div><div style={{ color: '#727d8c', fontSize: 13 }}>{preset?.parties_per_raid || 8} parties × {preset?.party_size || 5} members</div></div>
-          <div style={{ border: '1px solid #232832', borderRadius: 16, padding: 20, background: '#11151a' }}><div style={{ color: '#8893a1', fontSize: 13 }}>WORKSPACE</div><div style={{ marginTop: 8, fontSize: 20, fontWeight: 800 }}>{plan?.display_name || 'Beta'}</div><div style={{ color: '#727d8c', fontSize: 13 }}>{guild.slug} · {guild.timezone}</div></div>
-        </section>
+      <section className="panel">
+        <div className="panel-pad section-head">
+          <div><h2>Operations</h2><p>Same operating flow as Havoc, with guild-configurable rules around it.</p></div>
+          <span className="pill">{preset?.name || 'Guild Operations'}</span>
+        </div>
+        <div className="ops-list">
+          {operations.map(([title, text, href]) => (
+            <Link key={title} href={href} className="ops-row">
+              <strong>{title}</strong><p>{text}</p><span>Open →</span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
-          {cards.map(([eyebrow, title, text, href]) => <Link key={href} href={href} style={card}><div style={{ color: '#8893a1', fontSize: 12, fontWeight: 800, letterSpacing: '.12em' }}>{eyebrow}</div><h2 style={{ margin: '8px 0', fontSize: 26 }}>{title}</h2><p style={{ margin: 0, color: '#8893a1', lineHeight: 1.5 }}>{text}</p></Link>)}
-        </section>
-      </div>
-    </main>
+      <section className="panel panel-pad">
+        <div className="section-head"><div><h2>Current operating model</h2><p>HeadlessGM keeps persistent guild identity and history while each event carries its own attendance, lineup and auction state.</p></div></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>Default</th><th>Where to change</th></tr></thead>
+            <tbody>
+              <tr><td>Attendance</td><td>Assume attending unless LOA</td><td>Guild settings</td></tr>
+              <tr><td>Lineup</td><td>{preset?.raid_size || 40}-player Main + Sub</td><td>Game / event preset</td></tr>
+              <tr><td>Auction</td><td>Preset + caps; snapshot per auction run</td><td><Link href="/app/settings/auction">Auction Rules</Link></td></tr>
+              <tr><td>Discord</td><td>Communication/control surface, not source of truth</td><td><Link href="/app/settings/discord">Discord Settings</Link></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </AppShell>
   )
 }

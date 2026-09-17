@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import { listBotGuilds, listGuildTextChannels } from '../../../../lib/discord/server'
-import { publishHeadlessGMControlPanel, saveDiscordConnection, sendDiscordTestMessage } from './actions'
+import AppShell from '../../../../components/app-shell'
+import { publishHeadlessGMControlPanel, reconnectDiscord, saveDiscordConnection, sendDiscordTestMessage } from './actions'
 
 export default async function DiscordSettingsPage({ searchParams }) {
   const params = await searchParams
@@ -17,13 +18,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
   const isOwner = guild.owner_user_id === userId
   const { data: membership } = isOwner
     ? { data: { role: 'owner' } }
-    : await supabase
-        .from('guild_users')
-        .select('role')
-        .eq('guild_id', guild.id)
-        .eq('user_id', userId)
-        .in('role', ['owner', 'officer'])
-        .maybeSingle()
+    : await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
   if (!membership) redirect('/app')
 
   const { data: connection } = await supabase
@@ -32,111 +27,76 @@ export default async function DiscordSettingsPage({ searchParams }) {
     .eq('guild_id', guild.id)
     .maybeSingle()
 
-  const channelName = connection?.metadata?.channel_name
-
   let botGuilds = []
   let discordLoadError = ''
-
   if (isOwner) {
     try {
       const guildRows = await listBotGuilds()
-      botGuilds = await Promise.all(
-        guildRows.map(async (discordGuild) => {
-          try {
-            const channels = await listGuildTextChannels(discordGuild.id)
-            return { ...discordGuild, channels }
-          } catch {
-            return { ...discordGuild, channels: [] }
-          }
-        }),
-      )
+      botGuilds = await Promise.all(guildRows.map(async (discordGuild) => {
+        try { return { ...discordGuild, channels: await listGuildTextChannels(discordGuild.id) } }
+        catch { return { ...discordGuild, channels: [] } }
+      }))
     } catch (error) {
       discordLoadError = error?.message || 'Could not load Discord servers for the HeadlessGM bot.'
     }
   }
 
   return (
-    <main style={{ minHeight: '100vh', padding: '40px 24px 72px' }}>
-      <div style={{ width: 'min(900px, 100%)', margin: '0 auto', display: 'grid', gap: 24 }}>
-        <header>
-          <Link href="/app" style={{ color: '#8893a1', textDecoration: 'none' }}>← Dashboard</Link>
-          <p className="eyebrow" style={{ marginTop: 20 }}>{guild.name}</p>
-          <h1 style={{ fontSize: 48, lineHeight: 1 }}>Discord</h1>
-          <p className="lede">Discord is the interaction layer. HeadlessGM remains the source of truth for the in-game roster.</p>
-        </header>
+    <AppShell guildName={guild.name} title="Discord" activeHref="/app/settings/discord">
+      {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
+      {params?.success ? <div className="notice success">{String(params.success)}</div> : null}
+      {discordLoadError ? <div className="notice error">{discordLoadError}</div> : null}
 
-        {params?.error ? <div style={{ border: '1px solid #7f1d1d', borderRadius: 12, padding: 14, color: '#fca5a5' }}>{String(params.error)}</div> : null}
-        {params?.success ? <div style={{ border: '1px solid #14532d', borderRadius: 12, padding: 14, color: '#86efac' }}>{String(params.success)}</div> : null}
-        {discordLoadError ? <div style={{ border: '1px solid #7f1d1d', borderRadius: 12, padding: 14, color: '#fca5a5' }}>{discordLoadError}</div> : null}
+      <section className="panel panel-pad">
+        <div className="section-head">
+          <div><h2>Connection</h2><p>Discord is the member interaction and communication surface. HeadlessGM remains the system of record.</p></div>
+          <span className="pill">{connection?.bot_installed ? 'CONNECTED' : 'NOT CONNECTED'}</span>
+        </div>
 
-        <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 22, background: '#11151a', display: 'grid', gap: 14 }}>
-          <strong>Connection</strong>
-          <div style={{ color: '#8893a1', fontSize: 14 }}>
-            {connection?.bot_installed
-              ? `Connected to ${connection.discord_guild_name || 'Discord'}${channelName ? ` · #${channelName}` : ''}.`
-              : 'No Discord connection is configured yet.'}
+        {connection?.bot_installed ? (
+          <div className="notice" style={{ marginBottom: 16 }}>
+            <strong>{connection.discord_guild_name || 'Discord server'}</strong>
+            <div className="muted">{connection.metadata?.channel_name ? `Control channel: #${connection.metadata.channel_name}` : 'No control channel selected.'}</div>
           </div>
+        ) : null}
 
-          {isOwner ? (
-            <div style={{ display: 'grid', gap: 14, marginTop: 4 }}>
-              {botGuilds.length ? (
-                botGuilds.map((discordGuild) => (
-                  <form
-                    key={discordGuild.id}
-                    action={saveDiscordConnection}
-                    style={{ border: '1px solid #232832', borderRadius: 12, padding: 16, display: 'grid', gap: 12 }}
-                  >
-                    <input type="hidden" name="guild_id" value={guild.id} />
-                    <input type="hidden" name="discord_guild_id" value={discordGuild.id} />
-                    <div>
-                      <div style={{ fontWeight: 800 }}>{discordGuild.name}</div>
-                      <div style={{ color: '#727d8c', fontSize: 12, marginTop: 3 }}>Bot-installed Discord server</div>
-                    </div>
-                    {discordGuild.channels.length ? (
-                      <>
-                        <select
-                          name="channel_id"
-                          defaultValue={connection?.discord_guild_id === discordGuild.id ? connection?.metadata?.channel_id || '' : ''}
-                          required
-                          style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }}
-                        >
-                          <option value="">Select HeadlessGM channel</option>
-                          {discordGuild.channels.map((channel) => (
-                            <option key={channel.id} value={channel.id}>#{channel.name}</option>
-                          ))}
-                        </select>
-                        <button type="submit" style={{ border: 0, borderRadius: 10, padding: '11px 16px', fontWeight: 800, cursor: 'pointer' }}>
-                          {connection?.discord_guild_id === discordGuild.id ? 'Update Discord connection' : 'Connect this Discord server'}
-                        </button>
-                      </>
-                    ) : (
-                      <div style={{ color: '#fca5a5', fontSize: 13 }}>No text channels are visible to the HeadlessGM bot in this server.</div>
-                    )}
-                  </form>
-                ))
-              ) : discordLoadError ? null : (
-                <div style={{ color: '#8893a1', fontSize: 14 }}>The HeadlessGM bot is not installed in any Discord server this bot token can access.</div>
-              )}
-            </div>
-          ) : null}
+        {isOwner && connection?.bot_installed ? (
+          <form action={reconnectDiscord} style={{ marginBottom: 18 }}>
+            <input type="hidden" name="guild_id" value={guild.id} />
+            <button type="submit" className="button danger">Reconnect Discord</button>
+            <span className="muted" style={{ marginLeft: 10 }}>Clears only the Discord workspace link. Roster, events, applications, auction history and member records stay intact.</span>
+          </form>
+        ) : null}
 
-          {connection?.bot_installed ? (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
-              {isOwner ? (
-                <form action={sendDiscordTestMessage}>
-                  <input type="hidden" name="guild_id" value={guild.id} />
-                  <button type="submit" style={{ border: '1px solid #303742', borderRadius: 10, padding: '11px 16px', fontWeight: 700, cursor: 'pointer', background: '#0b0d10', color: '#f5f7fa' }}>Send test message</button>
-                </form>
-              ) : null}
-              <form action={publishHeadlessGMControlPanel}>
+        {isOwner ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {botGuilds.length ? botGuilds.map((discordGuild) => (
+              <form key={discordGuild.id} action={saveDiscordConnection} className="panel panel-pad" style={{ boxShadow: 'none' }}>
                 <input type="hidden" name="guild_id" value={guild.id} />
-                <button type="submit" style={{ border: 0, borderRadius: 10, padding: '11px 16px', fontWeight: 800, cursor: 'pointer' }}>Publish #headlessgm control panel</button>
+                <input type="hidden" name="discord_guild_id" value={discordGuild.id} />
+                <div className="section-head"><div><h3>{discordGuild.name}</h3><p>Bot-installed Discord server</p></div>{connection?.discord_guild_id === discordGuild.id ? <span className="pill">CURRENT</span> : null}</div>
+                {discordGuild.channels.length ? (
+                  <div className="form-grid">
+                    <label className="field full"><span>HeadlessGM control channel</span><select name="channel_id" defaultValue={connection?.discord_guild_id === discordGuild.id ? connection?.metadata?.channel_id || '' : ''} required><option value="">Select channel</option>{discordGuild.channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
+                    <div className="full"><button type="submit" className="button">{connection?.discord_guild_id === discordGuild.id ? 'Update channel' : 'Connect this Discord server'}</button></div>
+                  </div>
+                ) : <div className="notice error">No text channels are visible to the HeadlessGM bot in this server.</div>}
               </form>
-              <Link href={`/app/settings/discord/claims?guild=${encodeURIComponent(guild.id)}`} style={{ color: '#f5f7fa', alignSelf: 'center' }}>Review character claims →</Link>
-            </div>
-          ) : null}
+            )) : discordLoadError ? null : <div className="notice">The HeadlessGM bot is not installed in any Discord server this bot token can access.</div>}
+          </div>
+        ) : <div className="notice">Only the guild owner can change the connected Discord server or channel.</div>}
+      </section>
+
+      {connection?.bot_installed ? (
+        <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Discord operations</h2><p>Publish the control panel after changing servers or channels.</p></div></div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {isOwner ? <form action={sendDiscordTestMessage}><input type="hidden" name="guild_id" value={guild.id} /><button type="submit" className="button ghost">Send test message</button></form> : null}
+            <form action={publishHeadlessGMControlPanel}><input type="hidden" name="guild_id" value={guild.id} /><button type="submit" className="button">Publish #headlessgm control panel</button></form>
+            <Link href={`/app/settings/discord/claims?guild=${encodeURIComponent(guild.id)}`} className="button ghost">Review character claims</Link>
+          </div>
         </section>
-      </div>
-    </main>
+      ) : null}
+    </AppShell>
   )
 }
