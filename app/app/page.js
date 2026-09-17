@@ -36,6 +36,7 @@ export default async function AppHome() {
     ['RECRUITMENT', 'Applicants', `${openApps.count ?? 0} open applications · public page /${guild.slug}/apply`, '/app/recruitment'],
     ['ROSTER', 'Members', 'Authoritative in-game roster and Discord identity links.', '/app/members'],
     ['OPERATIONS', 'Events', `${upcomingEvents.count ?? 0} active/upcoming events · LOA → eligibility → lineup`, '/app/events'],
+    ['AUCTION', 'Rules & Caps', 'Feather and Puppet presets plus per-person reward limits.', '/app/settings/auction'],
     ['DISCORD', 'Control Panel', 'Connect the server, publish member controls, and review character claims.', '/app/settings/discord'],
   ]
 
