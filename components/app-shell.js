@@ -3,12 +3,11 @@ import ThemeToggle from './theme-toggle'
 
 const nav = [
   ['Overview', '/app'],
-  ['Events', '/app/events'],
-  ['Lineup Builder', '/app/events'],
-  ['Leave of Absence', '/app/events'],
-  ['Recruitment', '/app/recruitment'],
-  ['Auction Rules', '/app/settings/auction'],
   ['Members', '/app/members'],
+  ['Events', '/app/events'],
+  ['Auctions', '/app/auctions'],
+  ['Recruitment', '/app/recruitment'],
+  ['History', '/app/history'],
   ['Discord', '/app/settings/discord'],
   ['Settings', '/app/settings'],
 ]
