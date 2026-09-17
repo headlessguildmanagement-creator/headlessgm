@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import AppShell from '../../../../components/app-shell'
-import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember } from '../actions'
+import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember, setEventAbsence } from '../actions'
 
 export default async function EventDetailPage({ params, searchParams }) {
   const { id } = await params
@@ -20,20 +20,24 @@ export default async function EventDetailPage({ params, searchParams }) {
   const membership = await supabase.from('guild_users').select('role').eq('guild_id', event.guild_id).eq('user_id', userId).maybeSingle()
   const canManage = guild?.owner_user_id === userId || ['owner','officer'].includes(membership.data?.role)
 
-  const [{ data: members }, { data: loas }, { data: slots }, { data: jobs }] = await Promise.all([
+  const [{ data: members }, { data: loas }, { data: absences }, { data: slots }, { data: jobs }, { data: auctionRun }] = await Promise.all([
     supabase.from('guild_members').select('id,ign,job_code,combat_role,status,discord_user_id').eq('guild_id', event.guild_id).eq('status', 'active').order('ign'),
     supabase.from('event_loas').select('id,guild_member_id,reason,filed_at,cancelled_at').eq('event_id', id),
+    supabase.from('event_absences').select('id,guild_member_id,reason,created_at').eq('event_id', id),
     supabase.from('event_lineup_slots').select('*').eq('event_id', id).order('raid_code').order('party_no').order('slot_no'),
     supabase.from('game_jobs').select('code,label').eq('game_preset_id', guild.game_preset_id),
+    supabase.from('auction_runs').select('id,status').eq('event_id', id).maybeSingle(),
   ])
 
   const jobMap = Object.fromEntries((jobs || []).map((job) => [job.code, job.label]))
   const memberMap = new Map((members || []).map((member) => [member.id, member]))
   const activeLoas = (loas || []).filter((loa) => !loa.cancelled_at)
   const loaIds = new Set(activeLoas.map((loa) => loa.guild_member_id))
+  const absenceIds = new Set((absences || []).map((absence) => absence.guild_member_id))
   const expected = (members || []).filter((member) => !loaIds.has(member.id))
+  const eligible = expected.filter((member) => !absenceIds.has(member.id))
   const assignedIds = new Set((slots || []).filter((slot) => slot.guild_member_id).map((slot) => slot.guild_member_id))
-  const available = expected.filter((member) => !assignedIds.has(member.id))
+  const available = eligible.filter((member) => !assignedIds.has(member.id))
 
   const discordIdentity = (await supabase.auth.getUser()).data?.user?.identities?.find((identity) => identity.provider === 'discord')
   const myDiscordId = discordIdentity?.identity_data?.sub || discordIdentity?.identity_id || discordIdentity?.id || null
@@ -45,19 +49,26 @@ export default async function EventDetailPage({ params, searchParams }) {
   }
 
   function candidatesFor(currentMemberId) {
-    return expected.filter((member) => member.id === currentMemberId || !assignedIds.has(member.id))
+    return eligible.filter((member) => member.id === currentMemberId || !assignedIds.has(member.id))
   }
 
+  const headerActions = (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {canManage ? <Link href={`/app/events/${id}/auction`} className="button">Auction {auctionRun ? `· ${auctionRun.status}` : ''}</Link> : null}
+      <Link href="/app/events" className="button ghost">All events</Link>
+    </div>
+  )
+
   return (
-    <AppShell guildName={guild.name} eyebrow="EVENT COMMAND" title={event.name} activeHref="/app/events" actions={<Link href="/app/events" className="button ghost">All events</Link>}>
+    <AppShell guildName={guild.name} eyebrow="EVENT COMMAND" title={event.name} activeHref="/app/events" actions={headerActions}>
       {success ? <div className="notice success">{success}</div> : null}
       {errorMessage ? <div className="notice error">{errorMessage}</div> : null}
 
       <section className="stats">
         <div className="stat"><label>ACTIVE ROSTER</label><strong>{members?.length || 0}</strong><small>Persistent roster</small></div>
         <div className="stat"><label>LOA</label><strong>{activeLoas.length}</strong><small>Event-scoped exceptions</small></div>
-        <div className="stat"><label>EXPECTED</label><strong>{expected.length}</strong><small>Roster minus active LOA</small></div>
-        <div className="stat"><label>UNASSIGNED</label><strong>{available.length}</strong><small>Expected but not in Main/Sub</small></div>
+        <div className="stat"><label>NO-SHOW</label><strong>{absences?.length || 0}</strong><small>Excluded from lineup & auction</small></div>
+        <div className="stat"><label>UNASSIGNED</label><strong>{available.length}</strong><small>Eligible but not in Main/Sub</small></div>
       </section>
 
       <section className="panel panel-pad">
@@ -76,7 +87,7 @@ export default async function EventDetailPage({ params, searchParams }) {
 
       {myMember ? (
         <section className="panel panel-pad">
-          <div className="section-head"><div><h2>My availability</h2><p>Default policy: attending unless an LOA is filed before cutoff.</p></div><span className="pill">{myLoa ? 'LOA FILED' : 'ATTENDING'}</span></div>
+          <div className="section-head"><div><h2>My availability</h2><p>Default policy: attending unless an LOA is filed before cutoff.</p></div><span className="pill">{myLoa ? 'LOA FILED' : absenceIds.has(myMember.id) ? 'ABSENT' : 'ATTENDING'}</span></div>
           {myLoa ? (
             <form action={cancelMyLoa}><input type="hidden" name="event_id" value={event.id} /><p className="muted">{myLoa.reason || 'No reason provided.'}</p><button type="submit" className="button ghost">Cancel my LOA</button></form>
           ) : (
@@ -86,14 +97,16 @@ export default async function EventDetailPage({ params, searchParams }) {
       ) : null}
 
       <section className="panel">
-        <div className="panel-pad section-head"><div><h2>Attendance</h2><p>LOA removes a member from event eligibility without changing persistent roster status.</p></div></div>
+        <div className="panel-pad section-head"><div><h2>Attendance</h2><p>LOA is member-filed availability. No-show is officer-recorded after the lineup/event and removes auction eligibility without changing the persistent roster.</p></div><span className="pill">{eligible.length} ELIGIBLE</span></div>
         <div className="table-wrap" style={{ border: 0, borderRadius: 0 }}>
           <table>
-            <thead><tr><th>IGN</th><th>Class</th><th>Combat role</th><th>State</th><th>Reason</th></tr></thead>
+            <thead><tr><th>IGN</th><th>Class</th><th>Combat role</th><th>State</th><th>Reason</th>{canManage ? <th>Officer action</th> : null}</tr></thead>
             <tbody>
               {(members || []).map((member) => {
                 const loa = activeLoas.find((row) => row.guild_member_id === member.id)
-                return <tr key={member.id}><td><strong>{member.ign}</strong></td><td>{jobMap[member.job_code] || member.job_code || '—'}</td><td>{member.combat_role || '—'}</td><td><span className="pill">{loa ? 'LOA' : 'EXPECTED'}</span></td><td>{loa?.reason || '—'}</td></tr>
+                const absence = (absences || []).find((row) => row.guild_member_id === member.id)
+                const state = loa ? 'LOA' : absence ? 'NO-SHOW' : 'EXPECTED'
+                return <tr key={member.id}><td><strong>{member.ign}</strong></td><td>{jobMap[member.job_code] || member.job_code || '—'}</td><td>{member.combat_role || '—'}</td><td><span className="pill">{state}</span></td><td>{loa?.reason || absence?.reason || '—'}</td>{canManage ? <td>{loa ? <span className="muted">LOA controls availability</span> : <form action={setEventAbsence} style={{ display: 'flex', gap: 6 }}><input type="hidden" name="event_id" value={event.id}/><input type="hidden" name="guild_id" value={event.guild_id}/><input type="hidden" name="guild_member_id" value={member.id}/><input type="hidden" name="absent" value={absence ? 'false' : 'true'}/><button type="submit" className="button ghost">{absence ? 'Remove no-show' : 'Mark no-show'}</button></form>}</td> : null}</tr>
               })}
             </tbody>
           </table>
@@ -114,7 +127,7 @@ export default async function EventDetailPage({ params, searchParams }) {
                     const candidates = candidatesFor(member?.id)
                     return (
                       <form key={slotNo} action={assignLineupMember} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6 }}>
-                        <input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><input type="hidden" name="raid_code" value={raid} /><input type="hidden" name="party_no" value={party} /><input type="hidden" name="slot_no" value={slotNo} />
+                        <input type="hidden" name="event_id" value={event.id}/><input type="hidden" name="guild_id" value={event.guild_id}/><input type="hidden" name="raid_code" value={raid}/><input type="hidden" name="party_no" value={party}/><input type="hidden" name="slot_no" value={slotNo}/>
                         <select name="guild_member_id" defaultValue={member?.id || ''}><option value="">Slot {slotNo} · empty</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.ign} · {jobMap[candidate.job_code] || candidate.job_code || '—'}</option>)}</select>
                         <button type="submit" className="button ghost">Save</button>
                       </form>
@@ -128,9 +141,9 @@ export default async function EventDetailPage({ params, searchParams }) {
       )) : null}
 
       <section className="panel panel-pad">
-        <div className="section-head"><div><h2>Available pool</h2><p>Expected members not currently assigned to Main or Sub.</p></div><span className="pill">{available.length} AVAILABLE</span></div>
+        <div className="section-head"><div><h2>Available pool</h2><p>Expected members not on LOA/no-show and not currently assigned to Main or Sub.</p></div><span className="pill">{available.length} AVAILABLE</span></div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{available.map((member) => <span key={member.id} className="pill">{member.ign} · {jobMap[member.job_code] || member.job_code || '—'}</span>)}</div>
-        {!available.length ? <p className="muted" style={{ marginBottom: 0 }}>Everyone expected is assigned.</p> : null}
+        {!available.length ? <p className="muted" style={{ marginBottom: 0 }}>Everyone eligible is assigned.</p> : null}
       </section>
     </AppShell>
   )
