@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import { resolveGuild, withGuild } from '../../../lib/guild-context'
 import AppShell from '../../../components/app-shell'
 import { sendOfficerApplicationMessage, setApplicationStatus, confirmApplicantJoined } from './actions'
 
@@ -14,8 +15,7 @@ export default async function RecruitmentPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const { data: guildRows } = await supabase.from('guilds').select('id,name,slug,game_preset_id,owner_user_id').order('created_at').limit(1)
-  const guild = guildRows?.[0]
+  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,game_preset_id,owner_user_id')
   if (!guild) redirect('/app/onboarding')
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!manager) redirect('/app')
@@ -31,7 +31,7 @@ export default async function RecruitmentPage({ searchParams }) {
   if (selected) messages = (await supabase.from('application_messages').select('*').eq('application_id', selected.id).order('created_at')).data || []
 
   return (
-    <AppShell guildName={guild.name} eyebrow="RECRUITMENT" title="Applicants" activeHref="/app/recruitment" actions={<Link href={`/${guild.slug}/apply`} className="button ghost">Public apply page</Link>}>
+    <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="RECRUITMENT" title="Applicants" activeHref="/app/recruitment" actions={<Link href={`/${guild.slug}/apply`} className="button ghost">Public apply page</Link>}>
       {success ? <div className="notice success">{success}</div> : null}
       {errorMessage ? <div className="notice error">{errorMessage}</div> : null}
 
@@ -46,7 +46,7 @@ export default async function RecruitmentPage({ searchParams }) {
         <section className="panel">
           <div className="panel-pad section-head"><div><h2>Application queue</h2><p>Recruitment conversation stays attached to the application.</p></div></div>
           <div className="ops-list">
-            {(applications || []).map((app) => <Link key={app.id} href={`/app/recruitment?application=${app.id}`} className="ops-row" style={{ gridTemplateColumns: '1fr auto', background: selected?.id === app.id ? 'var(--panel2)' : undefined }}><div><strong>{app.ign}</strong><p>{app.discord_display_name || (app.discord_user_id ? 'Discord linked' : 'Discord not linked')}</p></div><span>{app.status.toUpperCase()}</span></Link>)}
+            {(applications || []).map((app) => <Link key={app.id} href={`${withGuild('/app/recruitment', guild.slug)}?application=${app.id}`} className="ops-row" style={{ gridTemplateColumns: '1fr auto', background: selected?.id === app.id ? 'var(--panel2)' : undefined }}><div><strong>{app.ign}</strong><p>{app.discord_display_name || (app.discord_user_id ? 'Discord linked' : 'Discord not linked')}</p></div><span>{app.status.toUpperCase()}</span></Link>)}
             {!applications?.length ? <div className="panel-pad muted">No applications yet.</div> : null}
           </div>
         </section>
