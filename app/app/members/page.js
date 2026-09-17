@@ -1,42 +1,22 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import AppShell from '../../../components/app-shell'
 import { addMember, updateMemberStatus } from './actions'
 
 export default async function MembersPage({ searchParams }) {
   const supabase = await createClient()
   const { data: authData, error: authError } = await supabase.auth.getClaims()
+  if (authError || !authData?.claims?.sub) redirect('/login')
 
-  if (authError || !authData?.claims?.sub) {
-    redirect('/login')
-  }
-
-  const { data: guildRows } = await supabase
-    .from('guilds')
-    .select('id, name, plan_code, game_preset_id')
-    .order('created_at', { ascending: true })
-    .limit(1)
-
+  const { data: guildRows } = await supabase.from('guilds').select('id, name, plan_code, game_preset_id').order('created_at').limit(1)
   const guild = guildRows?.[0]
-  if (!guild) {
-    redirect('/app/onboarding')
-  }
+  if (!guild) redirect('/app/onboarding')
 
   const [{ data: plan }, { data: preset }, { data: members }, { data: jobs }] = await Promise.all([
     supabase.from('plans').select('display_name, active_member_limit').eq('code', guild.plan_code).single(),
     supabase.from('game_presets').select('name, max_active_members').eq('id', guild.game_preset_id).single(),
-    supabase
-      .from('guild_members')
-      .select('id, ign, job_code, guild_role, status, is_officer, discord_user_id, created_at')
-      .eq('guild_id', guild.id)
-      .order('status', { ascending: true })
-      .order('ign', { ascending: true }),
-    supabase
-      .from('game_jobs')
-      .select('code, label, category, sort_order')
-      .eq('game_preset_id', guild.game_preset_id)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true }),
+    supabase.from('guild_members').select('id, ign, job_code, guild_role, status, is_officer, discord_user_id, created_at').eq('guild_id', guild.id).order('status').order('ign'),
+    supabase.from('game_jobs').select('code, label, category, sort_order').eq('game_preset_id', guild.game_preset_id).eq('is_active', true).order('sort_order'),
   ])
 
   const roster = members || []
@@ -44,99 +24,64 @@ export default async function MembersPage({ searchParams }) {
   const jobLabels = new Map(jobOptions.map((job) => [job.code, job.label]))
   const activeCount = roster.filter((member) => member.status === 'active').length
   const pendingCount = roster.filter((member) => member.status === 'pending').length
+  const linkedCount = roster.filter((member) => member.discord_user_id).length
   const limit = plan?.active_member_limit ?? preset?.max_active_members ?? 80
   const params = await searchParams
   const error = params?.error ? String(params.error) : ''
   const success = params?.success ? String(params.success) : ''
 
   return (
-    <main style={{ minHeight: '100vh', padding: '36px 24px 64px' }}>
-      <div style={{ width: 'min(1100px, 100%)', margin: '0 auto', display: 'grid', gap: 28 }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <Link href="/app" style={{ color: '#8893a1', textDecoration: 'none', fontSize: 14 }}>← Dashboard</Link>
-            <p className="eyebrow" style={{ marginTop: 18 }}>{guild.name}</p>
-            <h1 style={{ fontSize: 52, lineHeight: 1, letterSpacing: '-0.04em' }}>Members</h1>
-            <p className="lede" style={{ fontSize: 18, marginTop: 14 }}>
-              HeadlessGM is the operational ROOC roster. Discord users are linked later; they are not automatically counted as guild members.
-            </p>
-          </div>
+    <AppShell guildName={guild.name} eyebrow="ROSTER" title="Members" activeHref="/app/members">
+      {error ? <div className="notice error">{error}</div> : null}
+      {success ? <div className="notice success">{success}</div> : null}
 
-          <div style={{ border: '1px solid #232832', borderRadius: 14, padding: '16px 18px', minWidth: 180, background: '#11151a' }}>
-            <div style={{ fontSize: 28, fontWeight: 800 }}>{activeCount} / {limit}</div>
-            <div style={{ color: '#8893a1', fontSize: 13 }}>Active members · {plan?.display_name || 'Beta'}</div>
-            {pendingCount ? <div style={{ color: '#8893a1', fontSize: 13, marginTop: 4 }}>{pendingCount} pending</div> : null}
-          </div>
-        </header>
+      <section className="stats">
+        <div className="stat"><label>ACTIVE</label><strong>{activeCount} / {limit}</strong><small>{plan?.display_name || 'BETA'} plan</small></div>
+        <div className="stat"><label>PENDING</label><strong>{pendingCount}</strong><small>Recruit / onboarding state</small></div>
+        <div className="stat"><label>DISCORD LINKED</label><strong>{linkedCount}</strong><small>Stable provider IDs</small></div>
+        <div className="stat"><label>FORMER / INACTIVE</label><strong>{roster.length - activeCount - pendingCount}</strong><small>History preserved</small></div>
+      </section>
 
-        {error ? <div style={{ border: '1px solid #7f1d1d', borderRadius: 12, padding: 14, color: '#fca5a5' }}>{error}</div> : null}
-        {success ? <div style={{ border: '1px solid #14532d', borderRadius: 12, padding: 14, color: '#86efac' }}>{success}</div> : null}
-
-        <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 380px)', gap: 24, alignItems: 'start' }}>
-          <div style={{ border: '1px solid #232832', borderRadius: 16, overflow: 'hidden', background: '#11151a' }}>
-            <div style={{ padding: 20, borderBottom: '1px solid #232832' }}>
-              <strong>ROOC roster</strong>
-              <div style={{ color: '#8893a1', fontSize: 13, marginTop: 4 }}>Inactive and left members retain history and do not count toward the active limit.</div>
-            </div>
-
-            {roster.length ? (
-              <div style={{ display: 'grid' }}>
-                {roster.map((member) => (
-                  <div key={member.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(120px, .8fr) 110px auto', gap: 14, alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #1d222b' }}>
-                    <div>
-                      <strong>{member.ign}</strong>
-                      <div style={{ color: '#727d8c', fontSize: 12, marginTop: 3 }}>{member.discord_user_id ? 'Discord linked' : 'Discord not linked'}</div>
-                    </div>
-                    <div style={{ color: '#bbc3ce', fontSize: 14 }}>{jobLabels.get(member.job_code) || member.job_code || 'Job not set'}</div>
-                    <div style={{ color: member.status === 'active' ? '#86efac' : '#8893a1', fontSize: 13, textTransform: 'capitalize' }}>{member.status}</div>
-                    <form action={updateMemberStatus} style={{ display: 'flex', gap: 8 }}>
+      <section className="panel">
+        <div className="panel-pad section-head"><div><h2>Guild roster</h2><p>IGN is editable identity data. The member record itself persists across IGN/job/status changes.</p></div></div>
+        <div className="table-wrap" style={{ border: 0, borderRadius: 0 }}>
+          <table>
+            <thead><tr><th>IGN</th><th>Class</th><th>Guild role</th><th>Discord</th><th>Status</th><th>Update</th></tr></thead>
+            <tbody>
+              {roster.map((member) => (
+                <tr key={member.id}>
+                  <td><strong>{member.ign}</strong></td>
+                  <td>{jobLabels.get(member.job_code) || member.job_code || '—'}</td>
+                  <td>{member.guild_role || (member.is_officer ? 'Officer' : 'Member')}</td>
+                  <td>{member.discord_user_id ? 'Linked' : 'Not linked'}</td>
+                  <td><span className="pill">{member.status}</span></td>
+                  <td>
+                    <form action={updateMemberStatus} style={{ display: 'flex', gap: 7 }}>
                       <input type="hidden" name="guild_id" value={guild.id} />
                       <input type="hidden" name="member_id" value={member.id} />
-                      <select name="status" defaultValue={member.status} style={{ border: '1px solid #303742', borderRadius: 9, background: '#0b0d10', color: '#f5f7fa', padding: '8px 10px' }}>
-                        <option value="active">Active</option>
-                        <option value="pending">Pending</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="left">Left</option>
-                      </select>
-                      <button type="submit" style={{ border: 0, borderRadius: 9, padding: '8px 10px', cursor: 'pointer' }}>Save</button>
+                      <select name="status" defaultValue={member.status}><option value="active">Active</option><option value="pending">Pending</option><option value="inactive">Inactive</option><option value="left">Left</option></select>
+                      <button type="submit" className="button ghost">Save</button>
                     </form>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: 28, color: '#8893a1' }}>No ROOC members yet. Add the first member manually, then Discord import will speed this up later.</div>
-            )}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!roster.length ? <div className="panel-pad muted">No members yet. Add the first member below or import a roster during setup.</div> : null}
+      </section>
 
-          <aside style={{ display: 'grid', gap: 18 }}>
-            <section style={{ border: '1px solid #232832', borderRadius: 16, padding: 20, background: '#11151a' }}>
-              <strong>Add member</strong>
-              <p style={{ color: '#8893a1', fontSize: 13, lineHeight: 1.5 }}>Manual entry is the fallback. Discord import will later let an officer select a Discord user and map them to IGN + job.</p>
-              <form action={addMember} style={{ display: 'grid', gap: 12, marginTop: 18 }}>
-                <input type="hidden" name="guild_id" value={guild.id} />
-                <input name="ign" required maxLength={80} placeholder="ROOC IGN" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }} />
-                <select name="job_code" defaultValue="" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }}>
-                  <option value="">Select ROOC job</option>
-                  {jobOptions.map((job) => (
-                    <option key={job.code} value={job.code}>{job.label}</option>
-                  ))}
-                </select>
-                <input name="guild_role" placeholder="Guild role (optional)" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }} />
-                <select name="status" defaultValue="active" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }}>
-                  <option value="active">Active in-game member</option>
-                  <option value="pending">Pending / recruit</option>
-                </select>
-                <button type="submit" style={{ border: 0, borderRadius: 10, padding: '12px 14px', fontWeight: 800, cursor: 'pointer' }}>Add to HeadlessGM</button>
-              </form>
-            </section>
-
-            <section style={{ border: '1px dashed #303742', borderRadius: 16, padding: 20 }}>
-              <strong>Import from Discord</strong>
-              <p style={{ marginBottom: 0, color: '#727d8c', fontSize: 13, lineHeight: 1.5 }}>Next integration step: connect a Discord server, list candidates, then explicitly choose which users belong to the ROOC roster.</p>
-            </section>
-          </aside>
-        </section>
-      </div>
-    </main>
+      <section className="panel panel-pad">
+        <div className="section-head"><div><h2>Add member manually</h2><p>CSV/XML import will use the same canonical fields: IGN, Class, Combat Role, Guild Rank, optional Feather Group and Puppet Order.</p></div></div>
+        <form action={addMember} className="form-grid">
+          <input type="hidden" name="guild_id" value={guild.id} />
+          <label className="field"><span>IGN</span><input name="ign" required maxLength={80} placeholder="ROOC IGN" /></label>
+          <label className="field"><span>Class</span><select name="job_code" defaultValue=""><option value="">Select class</option>{jobOptions.map((job) => <option key={job.code} value={job.code}>{job.label}</option>)}</select></label>
+          <label className="field"><span>Guild rank</span><input name="guild_role" placeholder="Member / Officer / Commander / VGL / GL" /></label>
+          <label className="field"><span>Status</span><select name="status" defaultValue="active"><option value="active">Active</option><option value="pending">Pending</option></select></label>
+          <div className="full"><button type="submit" className="button">Add member</button></div>
+        </form>
+      </section>
+    </AppShell>
   )
 }
