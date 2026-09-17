@@ -27,6 +27,10 @@ async function verifyDiscordSignature(rawBody, request) {
   )
 }
 
+function ephemeral(content) {
+  return NextResponse.json({ type: 4, data: { content, flags: 64 } })
+}
+
 export async function POST(request) {
   const rawBody = await request.text()
   if (!(await verifyDiscordSignature(rawBody, request))) {
@@ -44,24 +48,29 @@ export async function POST(request) {
 
   if (interaction.type === 3) {
     const customId = String(interaction.data?.custom_id || '')
+    const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://headlessgm-nu.vercel.app'
+
     if (customId.startsWith('hgm:link:')) {
       const guildId = customId.slice('hgm:link:'.length)
-      if (!/^[0-9a-f-]{36}$/i.test(guildId)) {
-        return NextResponse.json({ type: 4, data: { content: 'This HeadlessGM link is invalid.', flags: 64 } })
-      }
-      const url = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://headlessgm-nu.vercel.app'}/app/link-character?guild=${encodeURIComponent(guildId)}`
-      return NextResponse.json({
-        type: 4,
-        data: {
-          content: `Open HeadlessGM to choose your existing character: ${url}`,
-          flags: 64,
-        },
-      })
+      if (!/^[0-9a-f-]{36}$/i.test(guildId)) return ephemeral('This HeadlessGM link is invalid.')
+      const url = `${site}/app/link-character?guild=${encodeURIComponent(guildId)}`
+      return ephemeral(`Open HeadlessGM to choose your existing character: ${url}`)
     }
-    if (customId.startsWith('hgm:coming_soon:')) {
-      return NextResponse.json({ type: 4, data: { content: 'Coming soon.', flags: 64 } })
+
+    if (customId.startsWith('hgm:member:')) {
+      const match = customId.match(/^hgm:member:(loa|events|lineup|rewards):([0-9a-f-]{36})$/i)
+      if (!match) return ephemeral('This HeadlessGM member action is invalid.')
+      const [, view, guildId] = match
+      const url = `${site}/app/member?guild=${encodeURIComponent(guildId)}&view=${encodeURIComponent(view)}`
+      const labels = {
+        loa: 'File or cancel your event LOA',
+        events: 'View upcoming guild events',
+        lineup: 'View your current lineup assignments',
+        rewards: 'View your published reward assignments',
+      }
+      return ephemeral(`${labels[view]}: ${url}`)
     }
   }
 
-  return NextResponse.json({ type: 4, data: { content: 'HeadlessGM received this interaction, but that action is not available yet.', flags: 64 } })
+  return ephemeral('HeadlessGM received this interaction, but that action is not available yet.')
 }
