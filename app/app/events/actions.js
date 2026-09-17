@@ -4,9 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
 
-function safe(value) {
-  return encodeURIComponent(String(value || '').slice(0, 240))
-}
+function safe(value) { return encodeURIComponent(String(value || '').slice(0, 240)) }
 
 async function requireUser() {
   const supabase = await createClient()
@@ -17,12 +15,18 @@ async function requireUser() {
 }
 
 async function requireManagerGuild(supabase, guildId, userId) {
-  const { data: guild } = await supabase.from('guilds').select('id, owner_user_id').eq('id', guildId).single()
+  const { data: guild } = await supabase.from('guilds').select('id, owner_user_id, timezone, loa_deadline_local_time').eq('id', guildId).single()
   if (!guild) throw new Error('Guild not found')
   if (guild.owner_user_id === userId) return guild
   const { data: membership } = await supabase.from('guild_users').select('role').eq('guild_id', guildId).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
   if (!membership) throw new Error('Officer access required')
   return guild
+}
+
+async function requireEventInGuild(supabase, eventId, guildId) {
+  const { data: event } = await supabase.from('guild_events').select('id,guild_id,status').eq('id', eventId).eq('guild_id', guildId).maybeSingle()
+  if (!event) throw new Error('Event does not belong to this guild')
+  return event
 }
 
 export async function createEvent(formData) {
@@ -37,12 +41,18 @@ export async function createEvent(formData) {
   try {
     await requireManagerGuild(supabase, guildId, userId)
     if (!name || !startsAt || !loaDeadline) throw new Error('Event name, start time, and LOA deadline are required')
+    const starts = new Date(startsAt)
+    const deadline = new Date(loaDeadline)
+    if (Number.isNaN(starts.getTime()) || Number.isNaN(deadline.getTime())) throw new Error('Invalid event date or time')
+    if (deadline >= starts) throw new Error('LOA deadline must be before the event start time')
+    if (!['guild_league','emperium_overrun','other'].includes(eventType)) throw new Error('Invalid event type')
+
     const { data, error } = await supabase.from('guild_events').insert({
       guild_id: guildId,
       name,
       event_type: eventType,
-      starts_at: new Date(startsAt).toISOString(),
-      loa_deadline: new Date(loaDeadline).toISOString(),
+      starts_at: starts.toISOString(),
+      loa_deadline: deadline.toISOString(),
       status: 'loa_open',
       created_by_user_id: userId,
     }).select('id').single()
@@ -65,6 +75,7 @@ export async function updateEventStatus(formData) {
   let url = `/app/events/${eventId}`
   try {
     await requireManagerGuild(supabase, guildId, userId)
+    await requireEventInGuild(supabase, eventId, guildId)
     if (!allowed.has(status)) throw new Error('Invalid event status')
     const { error } = await supabase.from('guild_events').update({ status, updated_at: new Date().toISOString() }).eq('id', eventId).eq('guild_id', guildId)
     if (error) throw error
@@ -108,6 +119,37 @@ export async function cancelMyLoa(formData) {
   redirect(url)
 }
 
+export async function setEventAbsence(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const guildId = String(formData.get('guild_id') || '')
+  const memberId = String(formData.get('guild_member_id') || '')
+  const absent = String(formData.get('absent') || '') === 'true'
+  const reason = String(formData.get('reason') || 'No-show').trim() || 'No-show'
+  const { supabase, userId } = await requireUser()
+  let url = `/app/events/${eventId}`
+  try {
+    await requireManagerGuild(supabase, guildId, userId)
+    await requireEventInGuild(supabase, eventId, guildId)
+    const { data: member } = await supabase.from('guild_members').select('id').eq('id', memberId).eq('guild_id', guildId).eq('status', 'active').maybeSingle()
+    if (!member) throw new Error('Member does not belong to this guild')
+
+    if (absent) {
+      const { error } = await supabase.from('event_absences').upsert({ event_id: eventId, guild_member_id: memberId, reason, created_by_user_id: userId, updated_at: new Date().toISOString() }, { onConflict: 'event_id,guild_member_id' })
+      if (error) throw error
+      await supabase.from('event_lineup_slots').update({ guild_member_id: null, updated_at: new Date().toISOString() }).eq('event_id', eventId).eq('guild_member_id', memberId)
+    } else {
+      const { error } = await supabase.from('event_absences').delete().eq('event_id', eventId).eq('guild_member_id', memberId)
+      if (error) throw error
+    }
+
+    revalidatePath(`/app/events/${eventId}`)
+    url += `?success=${safe(absent ? 'Member marked as absent/no-show.' : 'Absence removed.')}`
+  } catch (error) {
+    url += `?error=${safe(error.message || 'Could not update attendance.')}`
+  }
+  redirect(url)
+}
+
 export async function assignLineupMember(formData) {
   const eventId = String(formData.get('event_id') || '')
   const guildId = String(formData.get('guild_id') || '')
@@ -119,10 +161,17 @@ export async function assignLineupMember(formData) {
   let url = `/app/events/${eventId}`
   try {
     await requireManagerGuild(supabase, guildId, userId)
-    if (!['main','sub'].includes(raidCode)) throw new Error('Invalid raid')
+    await requireEventInGuild(supabase, eventId, guildId)
+    if (!['main','sub'].includes(raidCode) || !Number.isInteger(partyNo) || partyNo < 1 || partyNo > 8 || !Number.isInteger(slotNo) || slotNo < 1 || slotNo > 5) throw new Error('Invalid raid slot')
     if (memberId) {
-      const { data: loa } = await supabase.from('event_loas').select('id').eq('event_id', eventId).eq('guild_member_id', memberId).is('cancelled_at', null).maybeSingle()
+      const { data: member } = await supabase.from('guild_members').select('id').eq('id', memberId).eq('guild_id', guildId).eq('status', 'active').maybeSingle()
+      if (!member) throw new Error('Member does not belong to this guild')
+      const [{ data: loa }, { data: absence }] = await Promise.all([
+        supabase.from('event_loas').select('id').eq('event_id', eventId).eq('guild_member_id', memberId).is('cancelled_at', null).maybeSingle(),
+        supabase.from('event_absences').select('id').eq('event_id', eventId).eq('guild_member_id', memberId).maybeSingle(),
+      ])
       if (loa) throw new Error('That member is on LOA for this event')
+      if (absence) throw new Error('That member is marked absent/no-show for this event')
       await supabase.from('event_lineup_slots').update({ guild_member_id: null, updated_at: new Date().toISOString() }).eq('event_id', eventId).eq('guild_member_id', memberId)
     }
     const { error } = await supabase.from('event_lineup_slots').upsert({
