@@ -1,6 +1,6 @@
-import { KineticTextReveal } from "@/components/ui/kinetic-text-reveal";
-import { MagnetLines } from "@/components/ui/magnet-lines";
-import { HomepageModuleDock } from "@/components/home/homepage-module-dock";
+import { KineticTextReveal } from "../components/ui/kinetic-text-reveal";
+import { MagnetLines } from "../components/ui/magnet-lines";
+import { HomepageModuleDock } from "../components/home/homepage-module-dock";
 
 const stats = [
   { value: "80", label: "Members" },
