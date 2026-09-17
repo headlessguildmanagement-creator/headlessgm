@@ -59,7 +59,7 @@ export default async function OnboardingPage({ searchParams }) {
           <section className="panel panel-pad">
             <div className="section-head"><div><h2>4. Attendance & LOA</h2><p>Havoc defaults to everyone attending unless they file LOA.</p></div></div>
             <div className="form-grid">
-              <label className="field"><span>Attendance rule</span><select name="attendance_mode" defaultValue="assume_attending"><option value="assume_attending">Assume attending unless LOA</option><option value="rsvp">RSVP required</option></select></label>
+              <label className="field"><span>Attendance rule</span><select name="attendance_mode" defaultValue="assume_attending"><option value="assume_attending">Assume attending unless LOA</option><option value="rsvp_required">RSVP required</option></select></label>
               <label className="field"><span>LOA deadline on event day</span><input type="time" name="loa_deadline_local_time" defaultValue="19:30" /></label>
             </div>
           </section>
