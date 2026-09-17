@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
+import { resolveGuild } from '../../../../lib/guild-context'
 import AppShell from '../../../../components/app-shell'
 import { saveAuctionRules } from './actions'
 
@@ -10,7 +11,7 @@ export default async function AuctionSettingsPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id, plan_code').limit(1).maybeSingle()
+  const guild = await resolveGuild(supabase, params?.guild, 'id, name, slug, owner_user_id, plan_code')
   if (!guild) redirect('/app/onboarding')
 
   const isOwner = guild.owner_user_id === userId
@@ -28,7 +29,7 @@ export default async function AuctionSettingsPage({ searchParams }) {
   const commander = guild.plan_code === 'commander' || guild.plan_code === 'beta'
 
   return (
-    <AppShell guildName={guild.name} title="Auction Rules" activeHref="/app/settings/auction">
+    <AppShell guildName={guild.name} guildSlug={guild.slug} title="Auction Rules" activeHref="/app/settings/auction">
       {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
       {params?.success ? <div className="notice success">{String(params.success)}</div> : null}
 
