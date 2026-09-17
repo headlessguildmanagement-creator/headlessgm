@@ -6,6 +6,28 @@ import { createClient } from '../../../lib/supabase/server'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 240)) }
 
+function zonedLocalToDate(dateValue, timeValue, timeZone) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(timeValue)) return null
+  const [year, month, day] = dateValue.split('-').map(Number)
+  const [hour, minute] = timeValue.split(':').map(Number)
+  const targetUtc = Date.UTC(year, month - 1, day, hour, minute, 0)
+  let guess = targetUtc
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  })
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(guess)).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+    const observedUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second))
+    const delta = targetUtc - observedUtc
+    guess += delta
+    if (delta === 0) break
+  }
+  return new Date(guess)
+}
+
 async function requireUser() {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.getClaims()
@@ -32,20 +54,32 @@ async function requireEventInGuild(supabase, eventId, guildId) {
 export async function createEvent(formData) {
   const guildId = String(formData.get('guild_id') || '')
   const name = String(formData.get('name') || '').trim()
-  const startsAt = String(formData.get('starts_at') || '')
-  const loaDeadline = String(formData.get('loa_deadline') || '')
   const eventType = String(formData.get('event_type') || 'guild_league')
+  const eventDate = String(formData.get('event_date') || '')
+  const eventTime = String(formData.get('event_time') || '20:30')
+  const legacyStartsAt = String(formData.get('starts_at') || '')
+  const legacyLoaDeadline = String(formData.get('loa_deadline') || '')
   const { supabase, userId } = await requireUser()
 
   let url = '/app/events'
   try {
-    await requireManagerGuild(supabase, guildId, userId)
-    if (!name || !startsAt || !loaDeadline) throw new Error('Event name, start time, and LOA deadline are required')
-    const starts = new Date(startsAt)
-    const deadline = new Date(loaDeadline)
-    if (Number.isNaN(starts.getTime()) || Number.isNaN(deadline.getTime())) throw new Error('Invalid event date or time')
-    if (deadline >= starts) throw new Error('LOA deadline must be before the event start time')
+    const guild = await requireManagerGuild(supabase, guildId, userId)
+    if (!name) throw new Error('Event name is required')
     if (!['guild_league','emperium_overrun','other'].includes(eventType)) throw new Error('Invalid event type')
+
+    let starts
+    let deadline
+    if (eventDate) {
+      const deadlineTime = String(guild.loa_deadline_local_time || '19:30:00').slice(0, 5)
+      starts = zonedLocalToDate(eventDate, eventTime, guild.timezone || 'Asia/Manila')
+      deadline = zonedLocalToDate(eventDate, deadlineTime, guild.timezone || 'Asia/Manila')
+    } else {
+      starts = new Date(legacyStartsAt)
+      deadline = new Date(legacyLoaDeadline)
+    }
+
+    if (!starts || !deadline || Number.isNaN(starts.getTime()) || Number.isNaN(deadline.getTime())) throw new Error('Invalid event date or time')
+    if (deadline >= starts) throw new Error('LOA deadline must be before the event start time')
 
     const { data, error } = await supabase.from('guild_events').insert({
       guild_id: guildId,
