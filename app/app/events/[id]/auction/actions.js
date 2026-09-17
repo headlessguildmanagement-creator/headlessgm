@@ -4,41 +4,10 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../../lib/supabase/server'
 import { sendChannelMessage } from '../../../../../lib/discord/server'
+import { allocateCapped, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
 function qty(value) { const n = Number(value); return Number.isInteger(n) && n >= 0 ? n : 0 }
-
-function shuffle(items) {
-  const result = [...items]
-  for (let i = result.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[result[i], result[j]] = [result[j], result[i]]
-  }
-  return result
-}
-
-function allocate(category, total, pool, cap, source) {
-  if (!total || !pool.length) return { rows: [], unassigned: total }
-  const max = cap == null ? Number.MAX_SAFE_INTEGER : cap
-  const counts = new Map(pool.map((member) => [member.id, 0]))
-  let remaining = total
-  while (remaining > 0) {
-    let progressed = false
-    for (const member of pool) {
-      if (remaining <= 0) break
-      const current = counts.get(member.id) || 0
-      if (current >= max) continue
-      counts.set(member.id, current + 1)
-      remaining -= 1
-      progressed = true
-    }
-    if (!progressed) break
-  }
-  return {
-    rows: [...counts.entries()].filter(([, count]) => count > 0).map(([guild_member_id, quantity]) => ({ guild_member_id, category, quantity, source, metadata: {} })),
-    unassigned: remaining,
-  }
-}
 
 async function context(eventId) {
   const supabase = await createClient()
@@ -76,7 +45,7 @@ export async function generateAuctionDraft(formData) {
     ])
 
     const unavailable = new Set([...(loas || []).map((x) => x.guild_member_id), ...(absences || []).map((x) => x.guild_member_id)])
-    const eligible = (members || []).filter((member) => !unavailable.has(member.id))
+    const eligible = eligiblePool(members || [], unavailable)
     const memberMap = new Map((members || []).map((member) => [member.id, member]))
     const caps = {
       light_dark_feather: rules.light_dark_feather_cap,
@@ -105,8 +74,8 @@ export async function generateAuctionDraft(formData) {
         output.ffa[category] = { quantity: total, eligible_member_ids: eligible.map((m) => m.id), cap: caps[category] }
         continue
       }
-      let pool = rules.feather_mode === 'four_group' ? eligible.filter((member) => member.feather_group === activeGroup) : shuffle(eligible)
-      const result = allocate(category, total, pool, caps[category], rules.feather_mode === 'random' ? 'rotation' : 'base')
+      const pool = rules.feather_mode === 'four_group' ? eligible.filter((member) => member.feather_group === activeGroup) : shuffleWith(eligible)
+      const result = allocateCapped(category, total, pool, caps[category], rules.feather_mode === 'random' ? 'rotation' : 'base')
       allocations.push(...result.rows)
       unassigned[category] = result.unassigned
     }
@@ -118,9 +87,9 @@ export async function generateAuctionDraft(formData) {
       if (rules.puppet_mode === 'round_robin') {
         puppetPool = (queue || []).map((row) => memberMap.get(row.guild_member_id)).filter((member) => member && !unavailable.has(member.id))
       } else {
-        puppetPool = shuffle(eligible)
+        puppetPool = shuffleWith(eligible)
       }
-      const result = allocate('puppet_fragment', quantities.puppet_fragment, puppetPool, caps.puppet_fragment, rules.puppet_mode === 'round_robin' ? 'queue' : 'rotation')
+      const result = allocateCapped('puppet_fragment', quantities.puppet_fragment, puppetPool, caps.puppet_fragment, rules.puppet_mode === 'round_robin' ? 'queue' : 'rotation')
       allocations.push(...result.rows)
       unassigned.puppet_fragment = result.unassigned
     }
@@ -151,7 +120,7 @@ export async function publishAuction(formData) {
   const runId = String(formData.get('auction_run_id') || '')
   let url = `/app/events/${eventId}/auction`
   try {
-    const { supabase, event, guild } = await context(eventId)
+    const { supabase, event } = await context(eventId)
     const [{ data: run }, { data: allocations }, { data: members }, { data: connection }] = await Promise.all([
       supabase.from('auction_runs').select('id,status,input_data,generated_output,rules_snapshot').eq('id', runId).eq('event_id', eventId).single(),
       supabase.from('auction_allocations').select('guild_member_id,category,quantity,source').eq('auction_run_id', runId).order('category'),
