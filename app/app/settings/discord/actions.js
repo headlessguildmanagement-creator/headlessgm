@@ -83,9 +83,38 @@ export async function saveDiscordConnection(formData) {
 
     revalidatePath('/app')
     revalidatePath('/app/settings/discord')
-    destination = `/app/settings/discord?success=${safeMessage(`Connected to #${channel.name}`)}`
+    destination = `/app/settings/discord?success=${safeMessage(`Connected to ${discordGuild.name} · #${channel.name}`)}`
   } catch (error) {
     destination = `/app/settings/discord?error=${safeMessage(error.message || 'Discord connection failed')}&server=${safeMessage(discordGuildId)}`
+  }
+
+  redirect(destination)
+}
+
+export async function reconnectDiscord(formData) {
+  const guildId = String(formData.get('guild_id') || '')
+  const supabase = await createClient()
+  const { data: authData, error: authError } = await supabase.auth.getClaims()
+  const userId = authData?.claims?.sub
+  if (authError || !userId) redirect('/login')
+
+  let destination
+
+  try {
+    await requireOwnerGuild(supabase, guildId, userId)
+
+    const { error } = await supabase
+      .from('discord_connections')
+      .delete()
+      .eq('guild_id', guildId)
+
+    if (error) throw error
+
+    revalidatePath('/app')
+    revalidatePath('/app/settings/discord')
+    destination = `/app/settings/discord?success=${safeMessage('Discord connection cleared. Choose the new Discord server and channel below.')}`
+  } catch (error) {
+    destination = `/app/settings/discord?error=${safeMessage(error.message || 'Could not reset Discord connection')}`
   }
 
   redirect(destination)
