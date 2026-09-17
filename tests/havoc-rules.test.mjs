@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { havocFeatherGroup, isHavocScheduledEventDay } from '../lib/havoc-rules.js'
+import { havocFeatherGroup, isHavocScheduledEventDay } from '../lib/havoc-rules.mjs'
 
 test('Guild League Feather rotation keeps proven Havoc anchors', () => {
   assert.equal(havocFeatherGroup('guild_league', '2026-08-25'), 4)
