@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../../lib/supabase/server'
 import { sendChannelMessage } from '../../../../../lib/discord/server'
 import { allocateCapped, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
+import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
 function qty(value) { const n = Number(value); return Number.isInteger(n) && n >= 0 ? n : 0 }
@@ -17,7 +18,7 @@ async function context(eventId) {
 
   const { data: event } = await supabase.from('guild_events').select('id,guild_id,name,status,event_type,starts_at').eq('id', eventId).maybeSingle()
   if (!event) throw new Error('Event not found')
-  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id').eq('id', event.guild_id).single()
+  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id,game_preset_id,timezone,slug').eq('id', event.guild_id).single()
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!manager) throw new Error('Officer access required')
   return { supabase, userId, event, guild }
@@ -27,14 +28,14 @@ export async function generateAuctionDraft(formData) {
   const eventId = String(formData.get('event_id') || '')
   let url = `/app/events/${eventId}/auction`
   try {
-    const { supabase, event } = await context(eventId)
+    const { supabase, event, guild } = await context(eventId)
     const quantities = {
       light_dark_feather: qty(formData.get('light_dark_feather')),
       time_space_feather: qty(formData.get('time_space_feather')),
       puppet_fragment: qty(formData.get('puppet_fragment')),
       illusion_fragment: qty(formData.get('illusion_fragment')),
     }
-    const activeGroup = Number(formData.get('active_feather_group') || 0) || null
+    const requestedGroup = Number(formData.get('active_feather_group') || 0) || null
 
     const [{ data: rules }, { data: members }, { data: loas }, { data: absences }, { data: queue }] = await Promise.all([
       supabase.from('guild_auction_rules').select('*').eq('guild_id', event.guild_id).single(),
@@ -43,6 +44,12 @@ export async function generateAuctionDraft(formData) {
       supabase.from('event_absences').select('guild_member_id').eq('event_id', eventId),
       supabase.from('puppet_queue').select('guild_member_id,position,is_active').eq('guild_id', event.guild_id).eq('is_active', true).order('position'),
     ])
+
+    let activeGroup = requestedGroup
+    if (rules.feather_mode === 'four_group' && !activeGroup && guild.game_preset_id === 'rooc') {
+      activeGroup = havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
+    }
+    if (rules.feather_mode === 'four_group' && ![1,2,3,4].includes(activeGroup)) throw new Error('Choose the active Feather group for this event')
 
     const unavailable = new Set([...(loas || []).map((x) => x.guild_member_id), ...(absences || []).map((x) => x.guild_member_id)])
     const eligible = eligiblePool(members || [], unavailable)
@@ -54,7 +61,11 @@ export async function generateAuctionDraft(formData) {
       illusion_fragment: rules.illusion_fragment_cap,
     }
 
-    if (rules.feather_mode === 'four_group' && ![1,2,3,4].includes(activeGroup)) throw new Error('Choose the active Feather group for this event')
+    let activeFeatherGroupId = null
+    if (rules.feather_mode === 'four_group') {
+      const { data: groupRow } = await supabase.from('feather_groups').select('id').eq('guild_id', event.guild_id).eq('code', String(activeGroup)).maybeSingle()
+      activeFeatherGroupId = groupRow?.id || null
+    }
 
     const allocations = []
     const unassigned = {}
@@ -64,6 +75,7 @@ export async function generateAuctionDraft(formData) {
       feather_mode: rules.feather_mode,
       puppet_mode: rules.puppet_mode,
       active_feather_group: activeGroup,
+      active_feather_group_id: activeFeatherGroupId,
       ffa: {},
       unassigned: {},
     }
@@ -102,7 +114,7 @@ export async function generateAuctionDraft(formData) {
       p_input_data: { quantities, active_feather_group: activeGroup },
       p_generated_output: output,
       p_allocations: allocations,
-      p_active_feather_group_id: null,
+      p_active_feather_group_id: activeFeatherGroupId,
     })
     if (error) throw error
 
