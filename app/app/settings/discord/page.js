@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import { listBotGuilds, listGuildTextChannels } from '../../../../lib/discord/server'
 import AppShell from '../../../../components/app-shell'
-import { publishHeadlessGMControlPanel, reconnectDiscord, saveDiscordConnection, sendDiscordTestMessage } from './actions'
+import { provisionDiscordWorkspace, publishHeadlessGMControlPanel, reconnectDiscord, saveDiscordConnection, sendDiscordTestMessage } from './actions'
 
 export default async function DiscordSettingsPage({ searchParams }) {
   const params = await searchParams
@@ -21,11 +21,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
     : await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
   if (!membership) redirect('/app')
 
-  const { data: connection } = await supabase
-    .from('discord_connections')
-    .select('discord_guild_id, discord_guild_name, metadata, bot_installed')
-    .eq('guild_id', guild.id)
-    .maybeSingle()
+  const { data: connection } = await supabase.from('discord_connections').select('discord_guild_id, discord_guild_name, metadata, bot_installed').eq('guild_id', guild.id).maybeSingle()
 
   let botGuilds = []
   let discordLoadError = ''
@@ -57,6 +53,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
           <div className="notice" style={{ marginBottom: 16 }}>
             <strong>{connection.discord_guild_name || 'Discord server'}</strong>
             <div className="muted">{connection.metadata?.channel_name ? `Control channel: #${connection.metadata.channel_name}` : 'No control channel selected.'}</div>
+            {connection.metadata?.recruitment_channel_name ? <div className="muted">Recruitment channel: #{connection.metadata.recruitment_channel_name}</div> : null}
           </div>
         ) : null}
 
@@ -71,17 +68,31 @@ export default async function DiscordSettingsPage({ searchParams }) {
         {isOwner ? (
           <div style={{ display: 'grid', gap: 12 }}>
             {botGuilds.length ? botGuilds.map((discordGuild) => (
-              <form key={discordGuild.id} action={saveDiscordConnection} className="panel panel-pad" style={{ boxShadow: 'none' }}>
-                <input type="hidden" name="guild_id" value={guild.id} />
-                <input type="hidden" name="discord_guild_id" value={discordGuild.id} />
+              <div key={discordGuild.id} className="panel panel-pad" style={{ boxShadow: 'none' }}>
                 <div className="section-head"><div><h3>{discordGuild.name}</h3><p>Bot-installed Discord server</p></div>{connection?.discord_guild_id === discordGuild.id ? <span className="pill">CURRENT</span> : null}</div>
+
+                <div className="notice" style={{ marginBottom: 14 }}>
+                  <strong>Recommended setup</strong>
+                  <div className="muted">HeadlessGM can create a <strong>HEADLESSGM</strong> category with <strong>#headlessgm</strong> and <strong>#recruitment</strong>, connect the control channel, and publish the member panel automatically.</div>
+                  <div className="muted" style={{ marginTop: 5 }}>Discord must grant the bot <strong>Manage Channels</strong>. If this server was installed before that permission was added, reconnect the bot first.</div>
+                </div>
+
+                <form action={provisionDiscordWorkspace} style={{ marginBottom: 14 }}>
+                  <input type="hidden" name="guild_id" value={guild.id} />
+                  <input type="hidden" name="discord_guild_id" value={discordGuild.id} />
+                  <button type="submit" className="button">Create HeadlessGM category & channels</button>
+                </form>
+
+                <div className="muted" style={{ margin: '4px 0 10px' }}>Or use an existing channel:</div>
                 {discordGuild.channels.length ? (
-                  <div className="form-grid">
+                  <form action={saveDiscordConnection} className="form-grid">
+                    <input type="hidden" name="guild_id" value={guild.id} />
+                    <input type="hidden" name="discord_guild_id" value={discordGuild.id} />
                     <label className="field full"><span>HeadlessGM control channel</span><select name="channel_id" defaultValue={connection?.discord_guild_id === discordGuild.id ? connection?.metadata?.channel_id || '' : ''} required><option value="">Select channel</option>{discordGuild.channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
-                    <div className="full"><button type="submit" className="button">{connection?.discord_guild_id === discordGuild.id ? 'Update channel' : 'Connect this Discord server'}</button></div>
-                  </div>
-                ) : <div className="notice error">No text channels are visible to the HeadlessGM bot in this server.</div>}
-              </form>
+                    <div className="full"><button type="submit" className="button ghost">{connection?.discord_guild_id === discordGuild.id ? 'Update channel' : 'Connect existing channel'}</button></div>
+                  </form>
+                ) : <div className="notice">No existing text channels are visible to the bot. Automatic setup can still work if Manage Channels is granted.</div>}
+              </div>
             )) : discordLoadError ? null : <div className="notice">The HeadlessGM bot is not installed in any Discord server this bot token can access.</div>}
           </div>
         ) : <div className="notice">Only the guild owner can change the connected Discord server or channel.</div>}
