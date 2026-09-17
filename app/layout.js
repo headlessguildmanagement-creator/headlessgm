@@ -14,9 +14,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata = {
-  title: "HeadlessGM | Customizable Guild Management System",
+  title: "HeadlessGM | Ragnarok Origin Classic Guild Management",
   description:
-    "HeadlessGM is a configurable guild management platform for managing members, events, attendance, teams, rewards, rotations and guild operations across online games.",
+    "HeadlessGM helps Ragnarok Origin Classic guilds manage 80-member rosters, LOA, attendance, Main and Sub Raid lineups, Puppet, Feathers, rewards, and Discord workflows in one system.",
 };
 
 export default function RootLayout({ children }) {
