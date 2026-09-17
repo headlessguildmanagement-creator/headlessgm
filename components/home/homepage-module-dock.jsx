@@ -1,6 +1,6 @@
 "use client";
 
-import { MagneticDock } from "@/components/ui/magnetic-dock";
+import { MagneticDock } from "../ui/magnetic-dock";
 
 function Glyph({ children }) {
   return <span className="module-glyph" aria-hidden="true">{children}</span>;
