@@ -48,7 +48,7 @@ export async function createGuild(formData) {
 
   await supabase.from('guilds').update({
     timezone,
-    attendance_mode: ['assume_attending', 'rsvp'].includes(attendanceMode) ? attendanceMode : 'assume_attending',
+    attendance_mode: ['assume_attending', 'rsvp_required'].includes(attendanceMode) ? attendanceMode : 'assume_attending',
     loa_deadline_local_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(loaDeadline) ? `${loaDeadline}:00` : '19:30:00',
     ...(logoUrl ? { logo_url: logoUrl } : {}),
     updated_at: new Date().toISOString(),
