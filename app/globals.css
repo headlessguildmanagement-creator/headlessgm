@@ -33,6 +33,7 @@ html {
 body {
   margin: 0;
   min-height: 100%;
+  overflow-x: clip;
   background:
     radial-gradient(circle at 72% 13%, rgba(79, 70, 229, 0.17), transparent 30%),
     radial-gradient(circle at 84% 30%, rgba(168, 85, 247, 0.09), transparent 24%),
@@ -149,12 +150,12 @@ button:focus-visible {
   width: min(1380px, calc(100% - 48px));
   min-height: calc(100vh - 82px);
   margin: 0 auto;
-  padding: 90px 0 100px;
+  padding: 84px 0 96px;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(620px, 1.2fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(600px, 1.1fr);
   align-items: center;
-  gap: 72px;
+  gap: 64px;
 }
 
 .hero__glow {
@@ -241,7 +242,8 @@ button:focus-visible {
   border-radius: 22px;
   background: linear-gradient(180deg, #121b2e 0%, #0d1525 100%);
   box-shadow: var(--shadow-product);
-  transform: rotateY(-3deg) rotateX(1deg);
+  transform: rotateY(-2deg) rotateX(0.6deg) translateZ(0);
+  will-change: transform;
 }
 
 .product-window__bar {
@@ -600,7 +602,7 @@ button:focus-visible {
   color: #c7d2fe;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   .hero {
     grid-template-columns: 1fr;
     gap: 72px;
@@ -678,11 +680,13 @@ button:focus-visible {
   }
 
   .brand-strip {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .brand-strip p {
-    border-bottom: 1px solid var(--line);
+    padding: 21px 8px;
+    font-size: 9px;
+    letter-spacing: 0.05em;
   }
 
   .statement {
