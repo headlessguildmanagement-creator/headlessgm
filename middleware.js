@@ -15,6 +15,7 @@ export function middleware(request) {
 
   const target = request.nextUrl.clone()
   target.pathname = parts.length === 1 ? '/app' : `/app/${parts.slice(1).join('/')}`
+  target.searchParams.set('guild', slug)
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-headlessgm-workspace-slug', slug)
