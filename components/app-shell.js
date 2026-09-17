@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ThemeToggle from './theme-toggle'
+import { withGuild } from '../lib/guild-context'
 
 const nav = [
   ['Overview', '/app'],
@@ -12,17 +13,17 @@ const nav = [
   ['Settings', '/app/settings'],
 ]
 
-export default function AppShell({ guildName = 'HeadlessGM', eyebrow = 'COMMAND CENTER', title, activeHref = '/app', children, actions = null }) {
+export default function AppShell({ guildName = 'HeadlessGM', guildSlug = '', eyebrow = 'COMMAND CENTER', title, activeHref = '/app', children, actions = null }) {
   return (
     <div className="hgm-shell">
       <aside className="hgm-sidebar">
-        <Link href="/app" className="hgm-brand">
+        <Link href={withGuild('/app', guildSlug)} className="hgm-brand">
           <span className="hgm-brand-mark">H</span>
           <span><strong>{guildName}</strong><small>Guild Operations</small></span>
         </Link>
         <nav className="hgm-nav">
           {nav.map(([label, href]) => (
-            <Link key={`${label}-${href}`} href={href} className={activeHref === href ? 'active' : ''}>{label}</Link>
+            <Link key={`${label}-${href}`} href={withGuild(href, guildSlug)} className={activeHref === href ? 'active' : ''}>{label}</Link>
           ))}
         </nav>
         <div className="hgm-sidebar-foot"><span className="hgm-status-dot" /> HeadlessGM online</div>
