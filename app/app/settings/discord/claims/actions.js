@@ -15,14 +15,18 @@ export async function approveClaim(formData) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   if (authError || !authData?.claims?.sub) redirect('/login')
 
+  let redirectUrl
   try {
     const { error } = await supabase.rpc('approve_discord_character_claim', { p_claim_id: claimId })
     if (error) throw error
     revalidatePath('/app/settings/discord/claims')
-    redirect(`/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&success=${safeMessage('Character link approved.')}`)
+    revalidatePath('/app/members')
+    redirectUrl = `/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&success=${safeMessage('Character link approved.')}`
   } catch (error) {
-    redirect(`/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&error=${safeMessage(error.message || 'Could not approve claim.')}`)
+    redirectUrl = `/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&error=${safeMessage(error.message || 'Could not approve claim.')}`
   }
+
+  redirect(redirectUrl)
 }
 
 export async function rejectClaim(formData) {
@@ -33,6 +37,7 @@ export async function rejectClaim(formData) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   if (authError || !authData?.claims?.sub) redirect('/login')
 
+  let redirectUrl
   try {
     const { error } = await supabase.rpc('reject_discord_character_claim', {
       p_claim_id: claimId,
@@ -40,8 +45,10 @@ export async function rejectClaim(formData) {
     })
     if (error) throw error
     revalidatePath('/app/settings/discord/claims')
-    redirect(`/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&success=${safeMessage('Character link rejected.')}`)
+    redirectUrl = `/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&success=${safeMessage('Character link rejected.')}`
   } catch (error) {
-    redirect(`/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&error=${safeMessage(error.message || 'Could not reject claim.')}`)
+    redirectUrl = `/app/settings/discord/claims?guild=${encodeURIComponent(guildId)}&error=${safeMessage(error.message || 'Could not reject claim.')}`
   }
+
+  redirect(redirectUrl)
 }
