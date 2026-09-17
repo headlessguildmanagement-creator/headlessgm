@@ -22,7 +22,7 @@ export default async function MembersPage({ searchParams }) {
     redirect('/app/onboarding')
   }
 
-  const [{ data: plan }, { data: preset }, { data: members }] = await Promise.all([
+  const [{ data: plan }, { data: preset }, { data: members }, { data: jobs }] = await Promise.all([
     supabase.from('plans').select('display_name, active_member_limit').eq('code', guild.plan_code).single(),
     supabase.from('game_presets').select('name, max_active_members').eq('id', guild.game_preset_id).single(),
     supabase
@@ -31,9 +31,17 @@ export default async function MembersPage({ searchParams }) {
       .eq('guild_id', guild.id)
       .order('status', { ascending: true })
       .order('ign', { ascending: true }),
+    supabase
+      .from('game_jobs')
+      .select('code, label, category, sort_order')
+      .eq('game_preset_id', guild.game_preset_id)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true }),
   ])
 
   const roster = members || []
+  const jobOptions = jobs || []
+  const jobLabels = new Map(jobOptions.map((job) => [job.code, job.label]))
   const activeCount = roster.filter((member) => member.status === 'active').length
   const pendingCount = roster.filter((member) => member.status === 'pending').length
   const limit = plan?.active_member_limit ?? preset?.max_active_members ?? 80
@@ -79,7 +87,7 @@ export default async function MembersPage({ searchParams }) {
                       <strong>{member.ign}</strong>
                       <div style={{ color: '#727d8c', fontSize: 12, marginTop: 3 }}>{member.discord_user_id ? 'Discord linked' : 'Discord not linked'}</div>
                     </div>
-                    <div style={{ color: '#bbc3ce', fontSize: 14 }}>{member.job_code || 'Job not set'}</div>
+                    <div style={{ color: '#bbc3ce', fontSize: 14 }}>{jobLabels.get(member.job_code) || member.job_code || 'Job not set'}</div>
                     <div style={{ color: member.status === 'active' ? '#86efac' : '#8893a1', fontSize: 13, textTransform: 'capitalize' }}>{member.status}</div>
                     <form action={updateMemberStatus} style={{ display: 'flex', gap: 8 }}>
                       <input type="hidden" name="guild_id" value={guild.id} />
@@ -107,7 +115,12 @@ export default async function MembersPage({ searchParams }) {
               <form action={addMember} style={{ display: 'grid', gap: 12, marginTop: 18 }}>
                 <input type="hidden" name="guild_id" value={guild.id} />
                 <input name="ign" required maxLength={80} placeholder="ROOC IGN" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }} />
-                <input name="job_code" placeholder="Job / class" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }} />
+                <select name="job_code" defaultValue="" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }}>
+                  <option value="">Select ROOC job</option>
+                  {jobOptions.map((job) => (
+                    <option key={job.code} value={job.code}>{job.label}</option>
+                  ))}
+                </select>
                 <input name="guild_role" placeholder="Guild role (optional)" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }} />
                 <select name="status" defaultValue="active" style={{ border: '1px solid #303742', borderRadius: 10, background: '#0b0d10', color: '#f5f7fa', padding: '12px 13px' }}>
                   <option value="active">Active in-game member</option>
