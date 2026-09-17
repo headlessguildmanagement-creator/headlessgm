@@ -53,6 +53,8 @@ export async function saveDiscordConnection(formData) {
 
   if (authError || !userId) redirect('/login')
 
+  let destination
+
   try {
     await requireOwnerGuild(supabase, guildId, userId)
 
@@ -81,10 +83,12 @@ export async function saveDiscordConnection(formData) {
 
     revalidatePath('/app')
     revalidatePath('/app/settings/discord')
-    redirect(`/app/settings/discord?success=${safeMessage(`Connected to #${channel.name}`)}`)
+    destination = `/app/settings/discord?success=${safeMessage(`Connected to #${channel.name}`)}`
   } catch (error) {
-    redirect(`/app/settings/discord?error=${safeMessage(error.message || 'Discord connection failed')}&server=${safeMessage(discordGuildId)}`)
+    destination = `/app/settings/discord?error=${safeMessage(error.message || 'Discord connection failed')}&server=${safeMessage(discordGuildId)}`
   }
+
+  redirect(destination)
 }
 
 export async function sendDiscordTestMessage(formData) {
@@ -93,6 +97,8 @@ export async function sendDiscordTestMessage(formData) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
+
+  let destination
 
   try {
     const guild = await requireOwnerGuild(supabase, guildId, userId)
@@ -112,10 +118,12 @@ export async function sendDiscordTestMessage(formData) {
       }],
     })
 
-    redirect(`/app/settings/discord?success=${safeMessage('Test message sent to Discord')}`)
+    destination = `/app/settings/discord?success=${safeMessage('Test message sent to Discord')}`
   } catch (error) {
-    redirect(`/app/settings/discord?error=${safeMessage(error.message || 'Could not send Discord message')}`)
+    destination = `/app/settings/discord?error=${safeMessage(error.message || 'Could not send Discord message')}`
   }
+
+  redirect(destination)
 }
 
 export async function publishHeadlessGMControlPanel(formData) {
@@ -124,6 +132,8 @@ export async function publishHeadlessGMControlPanel(formData) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
+
+  let destination
 
   try {
     const guild = await requireManagerGuild(supabase, guildId, userId)
@@ -139,8 +149,10 @@ export async function publishHeadlessGMControlPanel(formData) {
 
     await publishDiscordControlPanel(channelId, guild.id, guild.name)
     revalidatePath('/app/settings/discord')
-    redirect(`/app/settings/discord?success=${safeMessage('HeadlessGM control panel published')}`)
+    destination = `/app/settings/discord?success=${safeMessage('HeadlessGM control panel published')}`
   } catch (error) {
-    redirect(`/app/settings/discord?error=${safeMessage(error.message || 'Could not publish HeadlessGM control panel')}`)
+    destination = `/app/settings/discord?error=${safeMessage(error.message || 'Could not publish HeadlessGM control panel')}`
   }
+
+  redirect(destination)
 }
