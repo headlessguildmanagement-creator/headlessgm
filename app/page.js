@@ -46,9 +46,21 @@ const roocNative = [
 ];
 
 const plans = [
-  ["FREE", "Up to 20 members", "Try the full HeadlessGM idea without running a complete ROOC guild."],
-  ["GUILD", "Full 80-member guild", "Run your actual ROOC roster, raids, attendance and rewards."],
-  ["COMMAND", "Automate operations", "Scheduled reminders, automated attendance and deeper workflows."],
+  [
+    "FREE — $0",
+    "Up to 20 members",
+    "Discord connection, roster, LOA, basic attendance and a preview of the ROOC raid workflow.",
+  ],
+  [
+    "GUILD — $6 / month",
+    "Full 80-member ROOC guild",
+    "Full raids, attendance, Puppet, Feathers, rewards, Discord reminders and guild history.",
+  ],
+  [
+    "COMMAND — $12 / month",
+    "Automate guild operations",
+    "Everything in Guild plus automated attendance, scheduled reminders, advanced workflows and analytics.",
+  ],
 ];
 
 export default function Home() {
@@ -67,7 +79,7 @@ export default function Home() {
         <nav className="site-nav" aria-label="Primary navigation">
           <a href="#features">ROOC Features</a>
           <a href="#discord">Discord Setup</a>
-          <a href="#plans">Plans</a>
+          <a href="#plans">Pricing</a>
         </nav>
 
         <a className="button button--small" href="/demo">
@@ -280,12 +292,12 @@ export default function Home() {
       <section className="section platform-section" id="plans">
         <div className="section-heading section-heading--split">
           <div>
-            <p className="eyebrow">Simple path to upgrade</p>
-            <h2>Try it. Run the guild. Automate it.</h2>
+            <p className="eyebrow">Pricing</p>
+            <h2>One guild. Three levels of control.</h2>
           </div>
           <p>
-            Free proves the system. Guild runs the full 80-member roster.
-            Command removes more officer admin.
+            No per-member pricing. Free lets you test the system. Guild runs a
+            complete 80-member ROOC guild. Command removes more officer admin.
           </p>
         </div>
 
@@ -325,7 +337,7 @@ export default function Home() {
         <div className="footer-links">
           <a href="#features">ROOC Features</a>
           <a href="#discord">Discord Setup</a>
-          <a href="#plans">Plans</a>
+          <a href="#plans">Pricing</a>
           <a href="/demo">Demo</a>
         </div>
         <p className="footer-note">Built for Ragnarok Origin Classic first.</p>
