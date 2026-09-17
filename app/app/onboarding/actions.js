@@ -26,8 +26,8 @@ export async function createGuild(formData) {
     redirect('/app/onboarding?error=Guild%20name%20must%20be%20between%202%20and%2080%20characters.')
   }
 
-  const { data: existingGuilds } = await supabase.from('guilds').select('id').limit(1)
-  if (existingGuilds?.length) redirect('/app')
+  const { data: existingGuilds } = await supabase.from('guilds').select('id,slug').order('created_at').limit(1)
+  if (existingGuilds?.length) redirect(`/${existingGuilds[0].slug}`)
 
   const { data: guildId, error } = await supabase.rpc('create_guild_workspace', {
     guild_name: name,
@@ -64,5 +64,7 @@ export async function createGuild(formData) {
     p_illusion_fragment_cap: intOrNull(formData.get('illusion_fragment_cap')),
   })
 
-  redirect('/app/members?success=Guild%20workspace%20created.%20Import%20your%20roster%20or%20add%20members%20manually.')
+  const { data: createdGuild } = await supabase.from('guilds').select('slug').eq('id', guildId).single()
+  const slug = createdGuild?.slug || guildId
+  redirect(`/${slug}/members?success=Guild%20workspace%20created.%20Import%20your%20roster%20or%20add%20members%20manually.`)
 }
