@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import { resolveGuild, withGuild } from '../../../lib/guild-context'
 import AppShell from '../../../components/app-shell'
 import { createEvent } from './actions'
 
@@ -13,8 +14,7 @@ export default async function EventsPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const { data: guildRows } = await supabase.from('guilds').select('id,name,timezone,loa_deadline_local_time,owner_user_id').order('created_at').limit(1)
-  const guild = guildRows?.[0]
+  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,timezone,loa_deadline_local_time,owner_user_id')
   if (!guild) redirect('/app/onboarding')
   const membership = await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).maybeSingle()
   const canManage = guild.owner_user_id === userId || ['owner','officer'].includes(membership.data?.role)
@@ -22,7 +22,7 @@ export default async function EventsPage({ searchParams }) {
   const loaTime = String(guild.loa_deadline_local_time || '19:30:00').slice(0,5)
 
   return (
-    <AppShell guildName={guild.name} eyebrow="OPERATIONS" title="Events" activeHref="/app/events">
+    <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="OPERATIONS" title="Events" activeHref="/app/events">
       {success ? <div className="notice success">{success}</div> : null}
       {errorMessage ? <div className="notice error">{errorMessage}</div> : null}
 
@@ -45,7 +45,7 @@ export default async function EventsPage({ searchParams }) {
         <div className="panel-pad section-head"><div><h2>Event history & queue</h2><p>Open an event to manage attendance, Main/Sub lineup, auction and finalization.</p></div></div>
         <div className="ops-list">
           {(events || []).map((event) => (
-            <Link key={event.id} href={`/app/events/${event.id}`} className="ops-row">
+            <Link key={event.id} href={withGuild(`/app/events/${event.id}`, guild.slug)} className="ops-row">
               <strong>{event.name}</strong>
               <p>{event.event_type.replaceAll('_',' ').toUpperCase()} · {new Date(event.starts_at).toLocaleString()} · LOA {new Date(event.loa_deadline).toLocaleString()}</p>
               <span>{event.status.toUpperCase()} →</span>
