@@ -17,6 +17,8 @@ export async function submitCharacterClaim(formData) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   if (authError || !authData?.claims?.sub) redirect('/login')
 
+  let destination
+
   try {
     const { error } = await supabase.rpc('submit_discord_character_claim', {
       p_guild_id: guildId,
@@ -24,9 +26,13 @@ export async function submitCharacterClaim(formData) {
       p_discord_username: discordUsername,
       p_discord_display_name: discordDisplayName,
     })
+
     if (error) throw error
-    redirect(`/app/link-character?guild=${encodeURIComponent(guildId)}&success=${message('Claim submitted. An officer must approve the link before it becomes active.')}`)
+
+    destination = `/app/link-character?guild=${encodeURIComponent(guildId)}&success=${message('Claim submitted. An officer must approve the link before it becomes active.')}`
   } catch (error) {
-    redirect(`/app/link-character?guild=${encodeURIComponent(guildId)}&error=${message(error.message || 'Could not submit character claim.')}`)
+    destination = `/app/link-character?guild=${encodeURIComponent(guildId)}&error=${message(error.message || 'Could not submit character claim.')}`
   }
+
+  redirect(destination)
 }
