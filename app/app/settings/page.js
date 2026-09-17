@@ -17,11 +17,11 @@ export default async function SettingsPage() {
   if (!membership) redirect('/app')
 
   const rows = [
-    ['Guild profile', `${guild.name} · /${guild.slug} · ${guild.timezone}`, '/app'],
+    ['Guild profile', `${guild.name} · /${guild.slug} · ${guild.timezone} · logo · attendance · LOA defaults`, '/app/settings/profile'],
     ['Auction rules', 'Feather/Puppet allocation presets and reward caps. Custom rules are a COMMANDER feature.', '/app/settings/auction'],
     ['Discord', 'Server connection, channel selection, reconnect, control panel and character claims.', '/app/settings/discord'],
     ['Recruitment', 'Applications, applicant conversations and onboarding.', '/app/recruitment'],
-    ['Members', 'Roster, identity links and member status.', '/app/members'],
+    ['Members', 'Roster import, identity links and member status.', '/app/members'],
     ['Events', 'Event lifecycle, LOA, attendance and lineup operations.', '/app/events'],
   ]
 
