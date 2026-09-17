@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
+import { resolveGuild } from '../../../../lib/guild-context'
 import AppShell from '../../../../components/app-shell'
 import { saveGuildProfile } from './actions'
 
@@ -10,14 +11,14 @@ export default async function GuildProfileSettingsPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const { data: guild } = await supabase.from('guilds').select('id,name,slug,timezone,plan_code,owner_user_id,logo_url,attendance_mode,loa_deadline_local_time').limit(1).maybeSingle()
+  const guild = await resolveGuild(supabase, params?.guild, 'id,name,slug,timezone,plan_code,owner_user_id,logo_url,attendance_mode,loa_deadline_local_time')
   if (!guild) redirect('/app/onboarding')
   if (guild.owner_user_id !== userId) redirect('/app/settings')
 
   const timeValue = String(guild.loa_deadline_local_time || '19:30:00').slice(0, 5)
 
   return (
-    <AppShell guildName={guild.name} title="Guild Profile" activeHref="/app/settings">
+    <AppShell guildName={guild.name} guildSlug={guild.slug} title="Guild Profile" activeHref="/app/settings">
       {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
       {params?.success ? <div className="notice success">{String(params.success)}</div> : null}
 
