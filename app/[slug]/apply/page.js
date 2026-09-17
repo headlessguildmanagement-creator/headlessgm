@@ -120,7 +120,8 @@ export default async function ApplyPage({ params, searchParams }) {
             <label style={{ display: 'grid', gap: 6 }}>Event availability<textarea name="availability" rows={3} maxLength={1000} style={{ padding: 12, borderRadius: 10 }} /></label>
             <label style={{ display: 'grid', gap: 6 }}>Anything else?<textarea name="notes" rows={3} maxLength={1500} style={{ padding: 12, borderRadius: 10 }} /></label>
             <button type="submit" style={{ padding: '13px 18px', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Submit application</button>
-          </form>) : panel(<><h2 style={{ marginTop: 0 }}>Recruitment is currently closed</h2><p style={{ color: '#8b96a5', marginBottom: 0 }}>Check back later for openings.</p></>)}
+          </form>) : panel(<><h2 style={{ marginTop: 0 }}>Recruitment is currently closed</h2><p style={{ color: '#8b96a5', marginBottom: 0 }}>Check back later for openings.</p></>)
+        )}
       </div>
     </main>
   )
