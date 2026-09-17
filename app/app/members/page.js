@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import { resolveGuild } from '../../../lib/guild-context'
 import AppShell from '../../../components/app-shell'
 import { addMember, importMembers, updateMemberStatus } from './actions'
 
@@ -8,8 +9,8 @@ export default async function MembersPage({ searchParams }) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   if (authError || !authData?.claims?.sub) redirect('/login')
 
-  const { data: guildRows } = await supabase.from('guilds').select('id, name, plan_code, game_preset_id').order('created_at').limit(1)
-  const guild = guildRows?.[0]
+  const params = await searchParams
+  const guild = await resolveGuild(supabase, params?.guild, 'id,name,slug,plan_code,game_preset_id')
   if (!guild) redirect('/app/onboarding')
 
   const [{ data: plan }, { data: preset }, { data: members }, { data: jobs }, { data: rules }] = await Promise.all([
@@ -27,12 +28,11 @@ export default async function MembersPage({ searchParams }) {
   const pendingCount = roster.filter((member) => member.status === 'pending').length
   const linkedCount = roster.filter((member) => member.discord_user_id).length
   const limit = plan?.active_member_limit ?? preset?.max_active_members ?? 80
-  const params = await searchParams
   const error = params?.error ? String(params.error) : ''
   const success = params?.success ? String(params.success) : ''
 
   return (
-    <AppShell guildName={guild.name} eyebrow="ROSTER" title="Members" activeHref="/app/members">
+    <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="ROSTER" title="Members" activeHref="/app/members">
       {error ? <div className="notice error">{error}</div> : null}
       {success ? <div className="notice success">{success}</div> : null}
 
