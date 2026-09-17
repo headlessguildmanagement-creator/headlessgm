@@ -57,7 +57,7 @@ export async function linkApplicationDiscord(formData) {
       })
       if (error) throw error
       revalidatePath(`/${slug}/apply`)
-      destination += `&success=${safe('Discord connected to your application.')}`
+      destination = `/${encodeURIComponent(slug)}/apply?success=${safe('Discord connected. You can now return to this applicant portal with your Discord login; the private link remains a backup.')}`
     }
   } catch (error) {
     destination += `&error=${safe(error.message || 'Could not connect Discord.')}`
@@ -72,18 +72,28 @@ export async function postApplicantMessage(formData) {
   const message = String(formData.get('message') || '').trim()
   const supabase = await createClient()
 
-  let destination = `/${encodeURIComponent(slug)}/apply?token=${encodeURIComponent(token)}`
+  let destination = token ? `/${encodeURIComponent(slug)}/apply?token=${encodeURIComponent(token)}` : `/${encodeURIComponent(slug)}/apply`
   try {
-    const { error } = await supabase.rpc('post_application_message', {
-      p_guild_slug: slug,
-      p_token: token,
-      p_message: message,
-    })
-    if (error) throw error
+    if (token) {
+      const { error } = await supabase.rpc('post_application_message', {
+        p_guild_slug: slug,
+        p_token: token,
+        p_message: message,
+      })
+      if (error) throw error
+    } else {
+      const { data: authData, error: authError } = await supabase.auth.getClaims()
+      if (authError || !authData?.claims?.sub) throw new Error('Sign in with Discord to reply without the private application link')
+      const { error } = await supabase.rpc('post_my_application_message', {
+        p_guild_slug: slug,
+        p_message: message,
+      })
+      if (error) throw error
+    }
     revalidatePath(`/${slug}/apply`)
-    destination += `&success=${safe('Message sent.')}`
+    destination += `${destination.includes('?') ? '&' : '?'}success=${safe('Message sent.')}`
   } catch (error) {
-    destination += `&error=${safe(error.message || 'Could not send message.')}`
+    destination += `${destination.includes('?') ? '&' : '?'}error=${safe(error.message || 'Could not send message.')}`
   }
 
   redirect(destination)
