@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '../../lib/supabase/client'
 
-export default function LoginButton() {
+export default function LoginButton({ next = '/app' }) {
   const [errorMessage, setErrorMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -12,7 +12,8 @@ export default function LoginButton() {
     setErrorMessage('')
 
     const supabase = createClient()
-    const redirectTo = `${window.location.origin}/auth/callback?next=/app`
+    const safeNext = typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : '/app'
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
