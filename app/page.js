@@ -52,12 +52,12 @@ const plans = [
     "Discord connection, roster, LOA, basic attendance and a preview of the ROOC raid workflow.",
   ],
   [
-    "GUILD — $6 / month",
+    "GUILD — $15.99 / month",
     "Full 80-member ROOC guild",
     "Full raids, attendance, Puppet, Feathers, rewards, Discord reminders and guild history.",
   ],
   [
-    "COMMAND — $12 / month",
+    "COMMAND — $24.99 / month",
     "Automate guild operations",
     "Everything in Guild plus automated attendance, scheduled reminders, advanced workflows and analytics.",
   ],
