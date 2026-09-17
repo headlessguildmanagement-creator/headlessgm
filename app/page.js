@@ -1,3 +1,7 @@
+import { KineticTextReveal } from "@/components/ui/kinetic-text-reveal";
+import { MagnetLines } from "@/components/ui/magnet-lines";
+import { HomepageModuleDock } from "@/components/home/homepage-module-dock";
+
 const stats = [
   { value: "80", label: "Members" },
   { value: "12", label: "Upcoming Events" },
@@ -33,11 +37,26 @@ export default function Home() {
 
       <section className="hero">
         <div className="hero__glow" aria-hidden="true" />
+        <div className="hero__magnet-field" aria-hidden="true">
+          <MagnetLines rows={5} columns={8} />
+        </div>
         <div className="hero__content">
           <p className="eyebrow">Headless Guild Management</p>
           <h1>
-            Run the guild.
-            <span>Not the spreadsheet.</span>
+            <KineticTextReveal
+              text="Run the guild."
+              className="kinetic-line"
+              splitBy="words"
+              delay={0.08}
+              stagger={0.08}
+            />
+            <KineticTextReveal
+              text="Not the spreadsheet."
+              className="kinetic-line kinetic-line--accent"
+              splitBy="words"
+              delay={0.28}
+              stagger={0.075}
+            />
           </h1>
           <p className="hero__copy">
             A fully customizable guild management system built around how your
@@ -135,6 +154,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <HomepageModuleDock />
 
       <section className="brand-strip" id="features">
         <p>Flexible</p>
