@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../lib/supabase/server'
-import { listBotGuilds, listGuildTextChannels, sendChannelMessage, publishHeadlessGMControlPanel } from '../../../../lib/discord/server'
+import { listBotGuilds, listGuildTextChannels, sendChannelMessage, publishHeadlessGMControlPanel as publishDiscordControlPanel } from '../../../../lib/discord/server'
 
 function safeMessage(value) {
   return encodeURIComponent(String(value || '').slice(0, 180))
@@ -137,7 +137,7 @@ export async function publishHeadlessGMControlPanel(formData) {
     const channelId = connection?.metadata?.channel_id
     if (!channelId) throw new Error('No #headlessgm channel is configured for this guild')
 
-    await publishHeadlessGMControlPanel(channelId, guild.id, guild.name)
+    await publishDiscordControlPanel(channelId, guild.id, guild.name)
     revalidatePath('/app/settings/discord')
     redirect(`/app/settings/discord?success=${safeMessage('HeadlessGM control panel published')}`)
   } catch (error) {
