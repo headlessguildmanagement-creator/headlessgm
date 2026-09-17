@@ -13,6 +13,7 @@ export default async function AppHome({ searchParams }) {
   const query = await searchParams
   const guild = await resolveGuild(supabase, query?.guild, 'id, name, slug, plan_code, game_preset_id, timezone, created_at')
   if (!guild) redirect('/app/onboarding')
+  if (!query?.guild) redirect(`/${guild.slug}`)
 
   const [{ data: plan }, { data: preset }, activeMembers, pendingMembers, openApps, upcomingEvents, { data: discord }] = await Promise.all([
     supabase.from('plans').select('display_name, active_member_limit').eq('code', guild.plan_code).single(),
