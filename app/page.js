@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ThemeToggle from '../components/theme-toggle'
+import DemoWorkspace from '../components/demo-workspace'
 
 const plans = [
   {
@@ -61,6 +62,7 @@ export default function Home() {
           <span><strong>HEADLESSGM</strong><small>HEADLESS GUILD MANAGEMENT</small></span>
         </Link>
         <nav className="marketing-links" aria-label="Primary navigation">
+          <a href="#demo">Live Demo</a>
           <a href="#product">Product</a>
           <a href="#workflow">Workflow</a>
           <a href="#pricing">Pricing</a>
@@ -82,8 +84,8 @@ export default function Home() {
             recruitment, Discord publication and persistent guild history.
           </p>
           <div className="marketing-hero-actions">
-            <Link href="/login" className="button marketing-primary">Start Free</Link>
-            <a href="#product" className="button ghost">See the product</a>
+            <a href="#demo" className="button marketing-primary">Try live demo</a>
+            <Link href="/login" className="button ghost">Start Free</Link>
           </div>
           <div className="marketing-proof">
             <span>Built around a proven live guild workflow</span>
@@ -133,6 +135,18 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="demo" className="marketing-demo-section">
+        <div className="marketing-demo-head">
+          <div>
+            <p className="eyebrow">NO-SIGNUP INTERACTIVE DEMO</p>
+            <h2>Try FREE, GUILD and COMMANDER right here.</h2>
+            <p>Add roster members, mark attendance, build the event state, randomize bidders, test recruitment and customize Commander. Demo data stays only in your browser and never touches a real guild workspace.</p>
+          </div>
+          <Link href="/demo" className="button ghost">Open full-screen demo →</Link>
+        </div>
+        <DemoWorkspace compact />
       </section>
 
       <section className="marketing-trust-strip">
@@ -231,13 +245,13 @@ export default function Home() {
         <p className="eyebrow">Headless Guild Management</p>
         <h2>Stop rebuilding guild state every event.</h2>
         <p>Run the roster, event, lineup, auction and history as one connected operating system.</p>
-        <div className="marketing-hero-actions"><Link href="/login" className="button marketing-primary">Start Free</Link><Link href="/login" className="button ghost">Sign in</Link></div>
+        <div className="marketing-hero-actions"><a href="#demo" className="button marketing-primary">Try demo</a><Link href="/login" className="button ghost">Create workspace</Link></div>
       </section>
 
       <footer className="marketing-footer">
         <div className="marketing-brand"><span className="marketing-brand-mark">H</span><span><strong>HEADLESSGM</strong><small>HEADLESS GUILD MANAGEMENT</small></span></div>
         <p>Guild operations, without the operational mess.</p>
-        <div><a href="#product">Product</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link></div>
+        <div><a href="#demo">Demo</a><a href="#product">Product</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link></div>
       </footer>
     </main>
   )
