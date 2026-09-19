@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import AppShell from '../../../../components/app-shell'
-import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember, setEventAbsence, importPreviousLineup, publishLineup } from '../actions'
+import LineupSearch from '../../../../components/lineup-search'
+import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember, setEventAbsence, importPreviousLineup, publishLineup, clearLineup } from '../actions'
 
 export default async function EventDetailPage({ params, searchParams }) {
   const { id } = await params
@@ -57,6 +58,14 @@ export default async function EventDetailPage({ params, searchParams }) {
     }
   }
 
+  const lineupSearchRows = (slots || [])
+    .filter((slot) => slot.guild_member_id)
+    .map((slot) => {
+      const member = memberMap.get(slot.guild_member_id)
+      return member ? { memberId: member.id, ign: member.ign, job: jobMap[member.job_code] || member.job_code || '', raid: slot.raid_code, party: slot.party_no, slot: slot.slot_no } : null
+    })
+    .filter(Boolean)
+
   const discordIdentity = (await supabase.auth.getUser()).data?.user?.identities?.find((identity) => identity.provider === 'discord')
   const myDiscordId = discordIdentity?.identity_data?.sub || discordIdentity?.identity_id || discordIdentity?.id || null
   const myMember = myDiscordId ? (members || []).find((member) => member.discord_user_id === myDiscordId) : null
@@ -103,6 +112,7 @@ export default async function EventDetailPage({ params, searchParams }) {
         ) : null}
         {canManage ? <div className="operator-actions">
           <form action={importPreviousLineup}><input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><button type="submit" className="button ghost">Use previous lineup</button></form>
+          <form action={clearLineup}><input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><button type="submit" className="button ghost">Clear lineup</button></form>
           <form action={publishLineup}><input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><button type="submit" className="button">Publish Lineup to Discord</button></form>
         </div> : null}
       </section>
@@ -134,6 +144,8 @@ export default async function EventDetailPage({ params, searchParams }) {
           </table>
         </div>
       </section>
+
+      <LineupSearch rows={lineupSearchRows} />
 
       {canManage && supportWarnings.length ? <div className="notice error lineup-support-warning"><strong>Party support warning:</strong> {supportWarnings.join(', ')} currently {supportWarnings.length === 1 ? 'has' : 'have'} assigned players but no Support-role member.</div> : null}
 

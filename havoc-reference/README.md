@@ -1,6 +1,6 @@
 # Final Havoc reference
 
-The uploaded `/havoc-guild-ops-main.zip` is the authoritative Havoc Guild Ops reference for HeadlessGM parity work.
+The uploaded `/havoc-reference/havoc-guild-ops-main.zip` is the authoritative Havoc Guild Ops reference for HeadlessGM parity work.
 
 Reference package version: **0.8.0**  
 Uploaded ZIP SHA-256: `1907acebeb253c3100970d34888885043b29ac39edc6807c188e36787d2da95e`

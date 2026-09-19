@@ -311,3 +311,22 @@ export async function publishLineup(formData) {
   }
   redirect(url)
 }
+
+
+export async function clearLineup(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const guildId = String(formData.get('guild_id') || '')
+  const { supabase, userId } = await requireUser()
+  let url = `/app/events/${eventId}`
+  try {
+    await requireManagerGuild(supabase, guildId, userId)
+    await requireEventInGuild(supabase, eventId, guildId)
+    const { error } = await supabase.from('event_lineup_slots').delete().eq('event_id', eventId)
+    if (error) throw error
+    revalidatePath(`/app/events/${eventId}`)
+    url += `?success=${safe('Lineup cleared. Attendance and roster history were not changed.')}`
+  } catch (error) {
+    url += `?error=${safe(error.message || 'Could not clear the lineup.')}`
+  }
+  redirect(url)
+}
