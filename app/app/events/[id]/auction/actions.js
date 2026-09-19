@@ -6,7 +6,6 @@ import { createClient } from '../../../../../lib/supabase/server'
 import { sendChannelMessage } from '../../../../../lib/discord/server'
 import { allocateCapped, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
 import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
-import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
 function qty(value) { const n = Number(value); return Number.isInteger(n) && n >= 0 ? n : 0 }
@@ -47,9 +46,6 @@ export async function generateAuctionDraft(formData) {
     ])
 
     let activeGroup = requestedGroup
-    if (rules.feather_mode === 'four_group' && !activeGroup && guild.game_preset_id === 'rooc') {
-      activeGroup = havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
-    }
     if (rules.feather_mode === 'four_group' && ['guild_league','emperium_overrun'].includes(event.event_type)) {
       activeGroup = havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
     }
