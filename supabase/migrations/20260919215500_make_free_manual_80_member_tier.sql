@@ -5,7 +5,7 @@ update public.plans
 set
   active_member_limit = 80,
   officer_limit = 2,
-  history_days = 0,
+  history_days = null,
   features = jsonb_build_object(
     'basic_roster', true,
     'manual_roster_entry', true,
