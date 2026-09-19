@@ -1,7 +1,10 @@
 import "./globals.css";
 
+const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "headlessgm-nu.vercel.app"
+const normalizedSiteUrl = /^https?:\/\//i.test(rawSiteUrl) ? rawSiteUrl : `https://${rawSiteUrl}`
+
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://headlessgm-nu.vercel.app"),
+  metadataBase: new URL(normalizedSiteUrl),
   title: {
     default: "HeadlessGM | Guild Operations",
     template: "%s | HeadlessGM",
