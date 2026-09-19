@@ -147,7 +147,7 @@ export default async function EventDetailPage({ params, searchParams }) {
 
       <LineupSearch rows={lineupSearchRows} />
 
-      {canManage && supportWarnings.length ? <div className="notice error lineup-support-warning"><strong>Party support warning:</strong> {supportWarnings.join(', ')} currently {supportWarnings.length === 1 ? 'has' : 'have'} assigned players but no Support-role member.</div> : null}
+      {canManage && guild.plan_code !== 'free' && supportWarnings.length ? <div className="notice error lineup-support-warning"><strong>Party support warning:</strong> {supportWarnings.join(', ')} currently {supportWarnings.length === 1 ? 'has' : 'have'} assigned players but no Support-role member.</div> : null}
 
       {canManage ? ['main','sub'].map((raid) => (
         <section key={raid} className="panel panel-pad">

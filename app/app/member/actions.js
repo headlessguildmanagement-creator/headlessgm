@@ -18,6 +18,8 @@ export async function fileMemberLoa(formData) {
   const eventId = String(formData.get('event_id') || '')
   const reason = String(formData.get('reason') || '').trim() || null
   const supabase = await requireUser()
+  const { data: guildPlan } = await supabase.from('guilds').select('plan_code').eq('id', guildId).maybeSingle()
+  if (guildPlan?.plan_code === 'free') redirect(`/app/member?guild=${encodeURIComponent(guildId)}&error=Member%20self-service%20requires%20the%20GUILD%20plan.`)
   let destination = `/app/member?guild=${encodeURIComponent(guildId)}`
   try {
     const { error } = await supabase.rpc('file_event_loa', { p_event_id: eventId, p_reason: reason })
@@ -32,6 +34,8 @@ export async function cancelMemberLoa(formData) {
   const guildId = String(formData.get('guild_id') || '')
   const eventId = String(formData.get('event_id') || '')
   const supabase = await requireUser()
+  const { data: guildPlan } = await supabase.from('guilds').select('plan_code').eq('id', guildId).maybeSingle()
+  if (guildPlan?.plan_code === 'free') redirect(`/app/member?guild=${encodeURIComponent(guildId)}&error=Member%20self-service%20requires%20the%20GUILD%20plan.`)
   let destination = `/app/member?guild=${encodeURIComponent(guildId)}`
   try {
     const { error } = await supabase.rpc('cancel_event_loa', { p_event_id: eventId })
@@ -47,6 +51,8 @@ export async function submitPuppetAppeal(formData) {
   const eventId = String(formData.get('event_id') || '')
   const reason = String(formData.get('reason') || '').trim()
   const supabase = await requireUser()
+  const { data: guildPlan } = await supabase.from('guilds').select('plan_code').eq('id', guildId).maybeSingle()
+  if (guildPlan?.plan_code === 'free') redirect(`/app/member?guild=${encodeURIComponent(guildId)}&error=Member%20self-service%20requires%20the%20GUILD%20plan.`)
   let destination = `/app/member?guild=${encodeURIComponent(guildId)}`
   try {
     const { error } = await supabase.rpc('submit_puppet_appeal', { p_guild_id: guildId, p_source_event_id: eventId, p_reason: reason })

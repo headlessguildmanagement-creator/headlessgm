@@ -20,6 +20,7 @@ export default async function MemberPortalPage({ searchParams }) {
 
   const { data: guildTheme } = await supabase.from('guilds').select('plan_code,settings').eq('id', guildId).maybeSingle()
   const brandStyle = commanderBrandStyle(guildTheme?.plan_code, guildTheme?.settings || {})
+  const freePlan = guildTheme?.plan_code === 'free'
   const branded = ['commander','beta'].includes(String(guildTheme?.plan_code || ''))
   const puppet = portal.puppet || {}
   return (
@@ -28,6 +29,8 @@ export default async function MemberPortalPage({ searchParams }) {
         <header className="member-portal-header"><div><p className="eyebrow">{portal.guild.name} · MEMBER PORTAL</p><h1>{portal.member.ign}</h1><p className="muted">Your Discord identity is linked. Availability, lineup, rewards and Puppet state are scoped to you.</p></div><ThemeToggle /></header>
         {success ? <div className="notice success">{success}</div> : null}
         {errorMessage ? <div className="notice error">{errorMessage}</div> : null}
+
+        {freePlan ? <div className="notice"><strong>FREE uses officer-managed attendance.</strong> Member LOA, Puppet appeals and Discord-driven self-service unlock on GUILD.</div> : null}
 
         <section className="stats member-portal-stats">
           <div className="stat"><label>PUPPET CYCLE</label><strong>{puppet.current_cycle || 1}</strong><small>Current guild cycle</small></div>
@@ -49,9 +52,9 @@ export default async function MemberPortalPage({ searchParams }) {
               <div><small>REWARDS</small><strong>{event.rewards?.length ? event.rewards.map((r)=>`${String(r.category).replaceAll('_',' ')} ×${r.quantity}${r.metadata?.turn_kind ? ` · ${r.metadata.turn_kind}` : ''}`).join(', ') : 'No published allocation'}</strong></div>
             </div>
 
-            {!closed && !pastDeadline ? <div className="member-event-actions">{event.loa ? <form action={cancelMemberLoa}><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><p className="muted">LOA filed{event.loa.reason ? `: ${event.loa.reason}` : ''}</p><button type="submit" className="button ghost">Cancel LOA</button></form> : <form action={fileMemberLoa} className="inline-action"><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><input name="reason" maxLength={500} placeholder="LOA reason (optional)"/><button type="submit" className="button">File LOA</button></form>}<div className="muted">LOA cutoff: {new Date(event.loa_deadline).toLocaleString()}</div></div> : null}
+            {!freePlan && !closed && !pastDeadline ? <div className="member-event-actions">{event.loa ? <form action={cancelMemberLoa}><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><p className="muted">LOA filed{event.loa.reason ? `: ${event.loa.reason}` : ''}</p><button type="submit" className="button ghost">Cancel LOA</button></form> : <form action={fileMemberLoa} className="inline-action"><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><input name="reason" maxLength={500} placeholder="LOA reason (optional)"/><button type="submit" className="button">File LOA</button></form>}<div className="muted">LOA cutoff: {new Date(event.loa_deadline).toLocaleString()}</div></div> : null}
 
-            {event.puppet_appealable ? <div className="member-event-actions"><h3>Puppet appeal</h3><p className="muted">A completed Puppet turn from this event is still inside the cycle's seven-day appeal window.</p><form action={submitPuppetAppeal} className="inline-action"><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><input name="reason" required minLength={3} maxLength={500} placeholder="Explain why this Puppet turn should be reviewed"/><button className="button ghost" type="submit">Submit appeal</button></form></div> : null}
+            {!freePlan && event.puppet_appealable ? <div className="member-event-actions"><h3>Puppet appeal</h3><p className="muted">A completed Puppet turn from this event is still inside the cycle's seven-day appeal window.</p><form action={submitPuppetAppeal} className="inline-action"><input type="hidden" name="guild_id" value={portal.guild.id}/><input type="hidden" name="event_id" value={event.id}/><input name="reason" required minLength={3} maxLength={500} placeholder="Explain why this Puppet turn should be reviewed"/><button className="button ghost" type="submit">Submit appeal</button></form></div> : null}
           </section>
         })}
         {!portal.events?.length ? <section className="panel panel-pad muted">No guild events are available yet.</section> : null}

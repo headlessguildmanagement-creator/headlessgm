@@ -12,7 +12,7 @@ export default async function RosterImportPage({ searchParams }) {
   if (authError || !userId) redirect('/login')
 
   const params = await searchParams
-  const guild = await resolveGuild(supabase, params?.guild, 'id,name,slug,owner_user_id')
+  const guild = await resolveGuild(supabase, params?.guild, 'id,name,slug,owner_user_id,plan_code')
   if (!guild) redirect('/app/onboarding')
 
   const isOwner = guild.owner_user_id === userId
@@ -20,6 +20,7 @@ export default async function RosterImportPage({ searchParams }) {
     ? { data: { role: 'owner' } }
     : await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()
   if (!access) redirect('/app')
+  if (guild.plan_code === 'free') redirect(`/${guild.slug}/members?error=Roster%20file%20import%20requires%20the%20GUILD%20plan.%20FREE%20uses%20manual%20entry.`)
 
   const [{ data: rules }, { data: jobs }] = await Promise.all([
     supabase.from('guild_auction_rules').select('feather_mode,puppet_mode').eq('guild_id', guild.id).maybeSingle(),

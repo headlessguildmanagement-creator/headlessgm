@@ -12,7 +12,7 @@ const nav = [
   ['Events', '/app/events'],
   ['Auctions', '/app/auctions'],
   ['Recruitment', '/app/recruitment', 'publicRecruitment'],
-  ['History', '/app/history'],
+  ['History', '/app/history', 'history'],
   ['Discord', '/app/settings/discord', 'discord'],
   ['Settings', '/app/settings'],
 ]

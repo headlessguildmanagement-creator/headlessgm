@@ -14,7 +14,8 @@ export default async function HistoryPage({ searchParams }) {
   const guild = await resolveGuild(supabase, params?.guild, 'id,name,slug,owner_user_id,plan_code')
   if (!guild) redirect('/app/onboarding')
   const access = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
-  if (!access) redirect(`/${guild.slug}`)
+  if (!access) redirect(`/${guild.slug}/overview`)
+  if (guild.plan_code === 'free') redirect(`/${guild.slug}/overview?error=Guild%20history%20requires%20the%20GUILD%20plan.`)
 
   const [{ data: events }, { data: cycles }, { data: appeals }, { data: deferred }] = await Promise.all([
     supabase.from('guild_events').select('id,name,event_type,starts_at,status').eq('guild_id', guild.id).order('starts_at', { ascending: false }).limit(80),

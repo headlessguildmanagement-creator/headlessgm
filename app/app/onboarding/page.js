@@ -21,7 +21,7 @@ export default async function OnboardingPage({ searchParams }) {
           <div>
             <p className="eyebrow">HEADLESSGM SETUP</p>
             <h1 style={{ fontSize: 38, margin: '4px 0 8px' }}>Set up your guild.</h1>
-            <p className="lede" style={{ fontSize: 16, margin: 0 }}>Start on FREE with the simplest HeadlessGM workflow. GUILD and COMMANDER unlock recruitment, Discord and deeper operating rules.</p>
+            <p className="lede" style={{ fontSize: 16, margin: 0 }}>Start on FREE like a structured guild spreadsheet: manually enter up to 80 members, mark event attendance yourself, build lineups and use FFA or Random bidding. GUILD adds automation; COMMANDER adds customization.</p>
           </div>
           <ThemeToggle />
         </header>
@@ -49,16 +49,16 @@ export default async function OnboardingPage({ searchParams }) {
           <section className="panel panel-pad"><p className="eyebrow">FREE</p><h2 style={{marginTop:6}}>Simple auction setup</h2><p className="muted">FREE includes FFA and Random. Per-person reward caps, 4 Group Feather and Puppet Round Robin unlock on GUILD. Custom rules unlock on COMMANDER.</p></section>
 
           <section className="panel panel-pad">
-            <div className="section-head"><div><h2>3. Attendance & LOA</h2><p>Havoc defaults to everyone attending unless they file LOA.</p></div></div>
-            <div className="form-grid">
-              <label className="field"><span>Attendance rule</span><select name="attendance_mode" defaultValue="assume_attending"><option value="assume_attending">Assume attending unless LOA</option><option value="rsvp_required">RSVP required</option></select></label>
-              <label className="field"><span>LOA deadline on event day</span><input type="time" name="loa_deadline_local_time" defaultValue="19:30" /></label>
-            </div>
+            <p className="eyebrow">FREE · MANUAL</p>
+            <h2 style={{ marginTop: 6 }}>3. Attendance</h2>
+            <p className="muted">FREE has no member LOA workflow. Officers mark members present or absent directly inside each event. Member self-service LOA unlocks on GUILD.</p>
+            <input type="hidden" name="attendance_mode" value="assume_attending" />
+            <input type="hidden" name="loa_deadline_local_time" value="19:30" />
           </section>
 
           <section className="panel panel-pad">
-            <div className="section-head"><div><h2>4. Roster comes next</h2><p>After this step you can upload CSV/XML or add members manually. The importer supports IGN, Class, CombatRole, GuildRank, FeatherGroup and PuppetOrder.</p></div></div>
-            <div className="notice">You can skip the roster, Discord and recruitment steps and return to them later from Settings.</div>
+            <div className="section-head"><div><h2>4. Roster comes next</h2><p>After this step, add members manually. FREE supports the full 80-member roster but file import unlocks on GUILD.</p></div></div>
+            <div className="notice">You can start with only a few members and finish the roster later. Discord, recruitment and roster file import are paid workflow features.</div>
           </section>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="submit" className="button">Create workspace & continue</button></div>

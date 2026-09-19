@@ -35,13 +35,19 @@ export default async function GuildProfileSettingsPage({ searchParams }) {
           {guild.logo_url ? <div style={{ marginTop: 14 }}><img src={guild.logo_url} alt={`${guild.name} logo`} style={{ maxWidth: 96, maxHeight: 96, borderRadius: 12, border: '1px solid var(--line)' }} /></div> : null}
         </section>
 
-        <section className="panel panel-pad">
+        {guild.plan_code === 'free' ? <section className="panel panel-pad">
+          <p className="eyebrow">FREE · MANUAL ATTENDANCE</p>
+          <h2 style={{ marginTop: 6 }}>Officer-managed attendance</h2>
+          <p className="muted">Members do not file LOA on FREE. Officers mark attendance manually inside each event. Member LOA and attendance automation unlock on GUILD.</p>
+          <input type="hidden" name="attendance_mode" value="assume_attending" />
+          <input type="hidden" name="loa_deadline_local_time" value={timeValue} />
+        </section> : <section className="panel panel-pad">
           <div className="section-head"><div><h2>Attendance & LOA defaults</h2><p>These defaults apply to future operations. Historical event snapshots remain unchanged.</p></div></div>
           <div className="form-grid">
             <label className="field"><span>Attendance mode</span><select name="attendance_mode" defaultValue={guild.attendance_mode || 'assume_attending'}><option value="assume_attending">Assume attending unless LOA</option><option value="rsvp_required">RSVP required</option>{guild.plan_code === 'commander' || guild.plan_code === 'beta' ? <option value="custom">Custom · COMMANDER</option> : null}</select></label>
             <label className="field"><span>LOA deadline on event day</span><input type="time" name="loa_deadline_local_time" defaultValue={timeValue} /></label>
           </div>
-        </section>
+        </section>}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="submit" className="button">Save guild profile</button></div>
       </form>

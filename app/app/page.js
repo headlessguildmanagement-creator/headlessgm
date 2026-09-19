@@ -114,7 +114,11 @@ export default async function AppHome({ searchParams }) {
     : { assignments: [] }
   const puppetNext = puppetSelection.assignments.map((row) => ({ ...row, member: memberMap.get(row.guild_member_id) })).filter((row) => row.member)
 
-  const overviewModules = guild.plan_code === 'commander' || guild.plan_code === 'beta' ? new Set(guild.settings?.overview?.modules || ['stats','current_event','alerts','events','feather','puppet','operations']) : new Set(['stats','current_event','alerts','events','feather','puppet','operations'])
+  const overviewModules = guild.plan_code === 'commander' || guild.plan_code === 'beta'
+    ? new Set(guild.settings?.overview?.modules || ['stats','current_event','alerts','events','feather','puppet','operations'])
+    : guild.plan_code === 'free'
+      ? new Set(['stats','current_event','events','operations'])
+      : new Set(['stats','current_event','alerts','events','feather','puppet','operations'])
 
   const operations = [
     ['Events & Attendance', `${events?.length || 0} active/upcoming events. LOA, availability and event state live here.`, withGuild('/app/events', guild.slug)],

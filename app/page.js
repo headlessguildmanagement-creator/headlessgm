@@ -7,8 +7,8 @@ const plans = [
     price: '$0',
     suffix: '/month',
     annual: '$0/year',
-    description: 'For trying HeadlessGM with a real guild workspace.',
-    features: ['Guild workspace', 'Roster & member identity', 'Events, LOA & attendance', 'Main/Sub lineup builder', 'FFA + Random auctions'],
+    description: 'A smarter guild spreadsheet with structured operations and randomized bidding.',
+    features: ['Up to 80 members', 'Manual roster entry', 'Manual event attendance', 'Manual Main/Sub lineup', 'FFA + Random bidding', 'No history or backup'],
     cta: 'Start Free',
   },
   {
@@ -16,8 +16,8 @@ const plans = [
     price: '$15.99',
     suffix: '/month',
     annual: '$143.91/year · 25% annual discount',
-    description: 'For active guilds that want the full operating workflow.',
-    features: ['Everything in Free', 'Public recruitment site + applications', 'Discord operations', 'Persistent Puppet & Feather presets', 'Reward caps, history & guild backup'],
+    description: 'For active guilds that want HeadlessGM to remove the repetitive officer work.',
+    features: ['Everything in Free', 'CSV/XML roster import + member LOA', 'Public recruitment + Discord operations', 'Persistent Puppet & Feather presets', 'Reward caps, 1-year history & backup'],
     cta: 'Choose Guild',
     featured: true,
   },
@@ -26,8 +26,8 @@ const plans = [
     price: '$24.99',
     suffix: '/month',
     annual: '$224.91/year · 25% annual discount',
-    description: 'For guilds that need fully configurable operating rules.',
-    features: ['Everything in Guild', 'Logo-derived app + recruitment branding', 'Typography + Brand Studio', 'Customizable officer overview', 'Custom auction rules & advanced controls'],
+    description: 'For guilds that want HeadlessGM to operate and look like their own guild system.',
+    features: ['Everything in Guild', 'Unlimited history', 'Logo-derived app + recruitment branding', 'Typography + Brand Studio', 'Customizable officer overview', 'Custom rules, policies & advanced controls'],
     cta: 'Choose Commander',
   },
 ]
@@ -184,7 +184,7 @@ export default function Home() {
       <section id="pricing" className="marketing-section marketing-section-alt">
         <div className="marketing-section-head">
           <p className="eyebrow">Pricing</p>
-          <h2>Start free. Upgrade when the guild needs more control.</h2>
+          <h2>FREE is manual. GUILD automates. COMMANDER adapts.</h2>
           <p>Annual billing is paid upfront and includes a 25% discount on paid plans.</p>
         </div>
         <div className="pricing-grid">
@@ -198,7 +198,7 @@ export default function Home() {
             <Link href="/login" className={plan.featured ? 'button' : 'button ghost'}>{plan.cta}</Link>
           </article>)}
         </div>
-        <div className="pricing-note"><strong>COMMANDER</strong> unlocks custom auction methods and custom rules. Standard presets remain available on lower tiers according to plan capability.</div>
+        <div className="pricing-note"><strong>FREE</strong> replaces the spreadsheet. <strong>GUILD</strong> replaces repetitive officer work. <strong>COMMANDER</strong> makes HeadlessGM operate and look like your guild's own system.</div>
       </section>
 
       <section className="marketing-section">

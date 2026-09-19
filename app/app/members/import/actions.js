@@ -104,8 +104,9 @@ export async function importRoster(formData) {
   if (!(file instanceof File) || !file.size) redirect('/app/members/import?error=Choose%20a%20CSV%20or%20XML%20file.')
   if (file.size > 2 * 1024 * 1024) redirect('/app/members/import?error=Roster%20file%20must%20be%202%20MB%20or%20smaller.')
 
-  const { data: guild } = await supabase.from('guilds').select('id,owner_user_id,game_preset_id').eq('id', guildId).maybeSingle()
+  const { data: guild } = await supabase.from('guilds').select('id,owner_user_id,game_preset_id,plan_code').eq('id', guildId).maybeSingle()
   if (!guild) redirect('/app/members/import?error=Guild%20not%20found.')
+  if (guild.plan_code === 'free') redirect('/app/members?error=Roster%20file%20import%20requires%20the%20GUILD%20plan.%20FREE%20uses%20manual%20entry.')
   if (guild.owner_user_id !== userId) {
     const { data: access } = await supabase.from('guild_users').select('role').eq('guild_id', guildId).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()
     if (!access) redirect('/app?error=Officer%20access%20required.')

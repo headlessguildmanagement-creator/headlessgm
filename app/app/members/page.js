@@ -3,6 +3,7 @@ import { createClient } from '../../../lib/supabase/server'
 import { resolveGuild } from '../../../lib/guild-context'
 import AppShell from '../../../components/app-shell'
 import { addMember, importMembers, updateMemberStatus } from './actions'
+import { hasPlanCapability } from '../../../lib/plans.mjs'
 
 export default async function MembersPage({ searchParams }) {
   const supabase = await createClient()
@@ -28,6 +29,7 @@ export default async function MembersPage({ searchParams }) {
   const pendingCount = roster.filter((member) => member.status === 'pending').length
   const linkedCount = roster.filter((member) => member.discord_user_id).length
   const limit = plan?.active_member_limit ?? preset?.max_active_members ?? 80
+  const canImport = hasPlanCapability(guild.plan_code, 'rosterImport')
   const error = params?.error ? String(params.error) : ''
   const success = params?.success ? String(params.success) : ''
 
@@ -43,7 +45,7 @@ export default async function MembersPage({ searchParams }) {
         <div className="stat"><label>FORMER / INACTIVE</label><strong>{roster.length - activeCount - pendingCount}</strong><small>History preserved</small></div>
       </section>
 
-      <section className="panel panel-pad">
+      {canImport ? <section className="panel panel-pad">
         <div className="section-head"><div><h2>Import roster</h2><p>CSV and XML imports are validated before any member is written. Existing members are never silently replaced.</p></div><span className="pill">CSV / XML</span></div>
         <form action={importMembers} className="form-grid">
           <input type="hidden" name="guild_id" value={guild.id} />
@@ -55,7 +57,11 @@ export default async function MembersPage({ searchParams }) {
           <div className="muted" style={{ marginTop: 5 }}>IGN, Class, CombatRole, GuildRank{rules?.feather_mode === 'four_group' ? ', FeatherGroup' : ', FeatherGroup (optional)'}{rules?.puppet_mode === 'round_robin' ? ', PuppetOrder' : ', PuppetOrder (optional)'}</div>
           <div className="muted" style={{ marginTop: 5 }}>FeatherGroup accepts 1–4 or A–D. PuppetOrder must be a unique positive whole number. Class names must match the ROOC preset.</div>
         </div>
-      </section>
+      </section> : <section className="panel panel-pad">
+        <p className="eyebrow">FREE · MANUAL ROSTER</p>
+        <h2 style={{ marginTop: 6 }}>Add members one at a time</h2>
+        <p className="muted">FREE is designed like a structured guild spreadsheet: up to 80 members, entered and maintained manually. CSV/XML roster import unlocks on GUILD.</p>
+      </section>}
 
       <section className="panel">
         <div className="panel-pad section-head"><div><h2>Guild roster</h2><p>IGN, class and roles can change. The HeadlessGM member ID is the permanent identity that history follows.</p></div></div>
@@ -86,7 +92,7 @@ export default async function MembersPage({ searchParams }) {
             </tbody>
           </table>
         </div>
-        {!roster.length ? <div className="panel-pad muted">No members yet. Import a roster above or add members manually below.</div> : null}
+        {!roster.length ? <div className="panel-pad muted">No members yet. Add members manually below.</div> : null}
       </section>
 
       <section className="panel panel-pad">

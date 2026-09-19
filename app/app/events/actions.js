@@ -88,7 +88,7 @@ export async function createEvent(formData) {
       event_type: eventType,
       starts_at: starts.toISOString(),
       loa_deadline: deadline.toISOString(),
-      status: 'loa_open',
+      status: guild.plan_code === 'free' ? 'upcoming' : 'loa_open',
       created_by_user_id: userId,
     }).select('id').single()
     if (error) throw error
@@ -129,6 +129,9 @@ export async function fileMyLoa(formData) {
   const { supabase } = await requireUser()
   let url = `/app/events/${eventId}`
   try {
+    const { data: event } = await supabase.from('guild_events').select('guild_id').eq('id', eventId).maybeSingle()
+    const { data: guild } = event ? await supabase.from('guilds').select('plan_code').eq('id', event.guild_id).maybeSingle() : { data: null }
+    if (guild?.plan_code === 'free') throw new Error('Member LOA requires the GUILD plan. FREE uses officer-managed attendance.')
     const { error } = await supabase.rpc('file_event_loa', { p_event_id: eventId, p_reason: reason || null })
     if (error) throw error
     revalidatePath(`/app/events/${eventId}`)
@@ -144,6 +147,9 @@ export async function cancelMyLoa(formData) {
   const { supabase } = await requireUser()
   let url = `/app/events/${eventId}`
   try {
+    const { data: event } = await supabase.from('guild_events').select('guild_id').eq('id', eventId).maybeSingle()
+    const { data: guild } = event ? await supabase.from('guilds').select('plan_code').eq('id', event.guild_id).maybeSingle() : { data: null }
+    if (guild?.plan_code === 'free') throw new Error('Member LOA requires the GUILD plan. FREE uses officer-managed attendance.')
     const { error } = await supabase.rpc('cancel_event_loa', { p_event_id: eventId })
     if (error) throw error
     revalidatePath(`/app/events/${eventId}`)
@@ -234,7 +240,8 @@ export async function importPreviousLineup(formData) {
   const { supabase, userId } = await requireUser()
   let url = `/app/events/${eventId}`
   try {
-    await requireManagerGuild(supabase, guildId, userId)
+    const guild = await requireManagerGuild(supabase, guildId, userId)
+    if (guild.plan_code === 'free') throw new Error('Previous-lineup reuse requires the GUILD plan. FREE lineups are maintained manually.')
     const current = await requireEventInGuild(supabase, eventId, guildId)
     const { data: previous } = await supabase.from('guild_events').select('id,name,starts_at').eq('guild_id', guildId).lt('starts_at', current.starts_at).not('status', 'eq', 'cancelled').order('starts_at', { ascending: false }).limit(1).maybeSingle()
     if (!previous) throw new Error('No previous guild event is available to import')

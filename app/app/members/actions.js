@@ -102,6 +102,7 @@ export async function importMembers(formData) {
   if (file.size > 2 * 1024 * 1024) redirect('/app/members?error=Roster%20file%20must%20be%202%20MB%20or%20smaller.')
 
   const guild = await getAuthenticatedGuild(supabase, guildId)
+  if (guild.plan_code === 'free') redirect('/app/members?error=Roster%20file%20import%20requires%20the%20GUILD%20plan.%20FREE%20uses%20manual%20roster%20entry.')
   const text = await file.text()
   const isXml = file.name.toLowerCase().endsWith('.xml') || file.type.includes('xml')
   const rawRows = isXml ? parseXml(text) : parseCsv(text)
