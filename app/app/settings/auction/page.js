@@ -46,13 +46,22 @@ export default async function AuctionSettingsPage({ searchParams }) {
         </section>
 
         <section className="panel panel-pad">
-          <div className="section-head"><div><h2>Per-person reward caps</h2><p>Random, FFA, group allocation and queue logic all filter against these limits before assigning rewards.</p></div></div>
+          <div className="section-head"><div><h2>Per-person reward caps</h2><p>Random, FFA, group allocation, Puppet cycles and Feather officer excess all obey these limits. Officer excess never bypasses a cap.</p></div></div>
           <div className="form-grid">
             <label className="field"><span>Light / Dark Feather</span><input name="light_dark_feather_cap" type="number" min="0" step="1" defaultValue={rules?.light_dark_feather_cap ?? ''} placeholder="Unlimited" /></label>
             <label className="field"><span>Time / Space Feather</span><input name="time_space_feather_cap" type="number" min="0" step="1" defaultValue={rules?.time_space_feather_cap ?? ''} placeholder="Unlimited" /></label>
             <label className="field"><span>Puppet Fragments</span><input name="puppet_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.puppet_fragment_cap ?? ''} placeholder="Unlimited" /></label>
             <label className="field"><span>Illusion Fragments</span><input name="illusion_fragment_cap" type="number" min="0" step="1" defaultValue={rules?.illusion_fragment_cap ?? ''} placeholder="Unlimited" /></label>
           </div>
+        </section>
+
+        <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Havoc / ROOC persistent rules</h2><p>When the standard ROOC preset is used, HeadlessGM keeps the persistent operating state instead of rebuilding it per event.</p></div></div>
+          <div className="table-wrap"><table><thead><tr><th>Rule</th><th>Behavior</th></tr></thead><tbody>
+            <tr><td>Puppet Round Robin</td><td>A–Z queue, per-cycle DONE/PENDING state, deferred make-ups, approved appeals, Cannot Bid and 96-hour eligibility. State advances only on finalization.</td></tr>
+            <tr><td>4 Group Feather</td><td>Calendar-driven group selection, combined L/D + T/S fairness, No Gold / 96H exclusions, then persistent officer excess rotation under the same caps.</td></tr>
+            <tr><td>Midnight completion</td><td>Generated past events are reconciled at 12:00 AM PHT so persistent state cannot remain stranded when an officer forgets to finalize.</td></tr>
+          </tbody></table></div>
         </section>
 
         <section className="panel panel-pad">

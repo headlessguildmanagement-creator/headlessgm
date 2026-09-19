@@ -11,7 +11,6 @@ async function managerContext(guildId) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
-
   const { data: guild } = await supabase.from('guilds').select('id,slug,owner_user_id').eq('id', guildId).maybeSingle()
   if (!guild) throw new Error('Guild not found')
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guildId).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
@@ -27,17 +26,31 @@ export async function movePuppetQueueMember(formData) {
   try {
     const { supabase, guild } = await managerContext(guildId)
     slug = guild.slug
-    const { error } = await supabase.rpc('move_puppet_queue_member', {
-      p_guild_id: guildId,
-      p_member_id: memberId,
-      p_direction: direction,
-    })
+    const { error } = await supabase.rpc('move_puppet_queue_member', { p_guild_id: guildId, p_member_id: memberId, p_direction: direction })
     if (error) throw error
     revalidatePath('/app/auctions')
-    redirect(`/${slug}/auctions?success=${safe('Puppet rotation updated.')}`)
+    redirect(`/${slug}/auctions?success=${safe('Puppet A–Z order updated.')}`)
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error
     redirect(`/${slug || 'app'}/auctions?error=${safe(error.message || 'Could not update Puppet rotation.')}`)
+  }
+}
+
+export async function setPuppetCycleMemberComplete(formData) {
+  const guildId = String(formData.get('guild_id') || '')
+  const memberId = String(formData.get('guild_member_id') || '')
+  const complete = String(formData.get('complete') || '') === 'true'
+  let slug = ''
+  try {
+    const { supabase, guild } = await managerContext(guildId)
+    slug = guild.slug
+    const { error } = await supabase.rpc('set_puppet_cycle_member_complete', { p_guild_id: guildId, p_member_id: memberId, p_complete: complete })
+    if (error) throw error
+    revalidatePath('/app/auctions')
+    redirect(`/${slug}/auctions?success=${safe(complete ? 'Puppet turn marked DONE for this cycle.' : 'Puppet turn returned to PENDING.')}`)
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error
+    redirect(`/${slug || 'app'}/auctions?error=${safe(error.message || 'Could not update Puppet cycle state.')}`)
   }
 }
 
@@ -60,5 +73,23 @@ export async function setMemberFeatherGroup(formData) {
   } catch (error) {
     if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error
     redirect(`/${slug || 'app'}/auctions?error=${safe(error.message || 'Could not update Feather Group.')}`)
+  }
+}
+
+export async function moveFeatherOfficerQueueMember(formData) {
+  const guildId = String(formData.get('guild_id') || '')
+  const memberId = String(formData.get('guild_member_id') || '')
+  const direction = String(formData.get('direction') || '')
+  let slug = ''
+  try {
+    const { supabase, guild } = await managerContext(guildId)
+    slug = guild.slug
+    const { error } = await supabase.rpc('move_feather_officer_queue_member', { p_guild_id: guildId, p_member_id: memberId, p_direction: direction })
+    if (error) throw error
+    revalidatePath('/app/auctions')
+    redirect(`/${slug}/auctions?success=${safe('Feather officer excess rotation updated.')}`)
+  } catch (error) {
+    if (error?.digest?.startsWith?.('NEXT_REDIRECT')) throw error
+    redirect(`/${slug || 'app'}/auctions?error=${safe(error.message || 'Could not update Feather officer rotation.')}`)
   }
 }

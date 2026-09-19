@@ -57,6 +57,8 @@ export async function provisionDiscordWorkspace(formData) {
         category_id: channels.category.id,
         recruitment_channel_id: channels.recruitment.id,
         recruitment_channel_name: channels.recruitment.name,
+        officer_ops_channel_id: channels.officerOps.id,
+        officer_ops_channel_name: channels.officerOps.name,
         provisioned_by_headlessgm: true,
       },
       updated_at: new Date().toISOString(),
@@ -66,7 +68,7 @@ export async function provisionDiscordWorkspace(formData) {
     await publishDiscordControlPanel(channels.control.id, guildId, discordGuild.name)
     revalidatePath('/app')
     revalidatePath('/app/settings/discord')
-    destination = `/app/settings/discord?success=${safeMessage('Created HEADLESSGM category, #headlessgm and #recruitment, then published the member control panel.')}`
+    destination = `/app/settings/discord?success=${safeMessage('Created HEADLESSGM category, #headlessgm, #recruitment and #officer-ops, then published the member control panel.')}`
   } catch (error) {
     const message = error?.message || 'Could not create Discord channels'
     destination = `/app/settings/discord?error=${safeMessage(message.includes('Missing Permissions') ? 'Discord denied channel creation. Reconnect/install HeadlessGM with Manage Channels permission, then try again.' : message)}`

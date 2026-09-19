@@ -65,6 +65,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
             <strong>{connection.discord_guild_name || 'Discord server'}</strong>
             <div className="muted">{connection.metadata?.channel_name ? `Control channel: #${connection.metadata.channel_name}` : 'No control channel selected.'}</div>
             {connection.metadata?.recruitment_channel_name ? <div className="muted">Recruitment channel: #{connection.metadata.recruitment_channel_name}</div> : null}
+            {connection.metadata?.officer_ops_channel_name ? <div className="muted">Officer operations: #{connection.metadata.officer_ops_channel_name}</div> : null}
           </div>
         ) : null}
 
@@ -84,7 +85,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
 
                 <div className="notice" style={{ marginBottom: 14 }}>
                   <strong>Recommended setup</strong>
-                  <div className="muted">Create a <strong>HEADLESSGM</strong> category with <strong>#headlessgm</strong> and <strong>#recruitment</strong>, connect the control channel, and publish the member panel automatically.</div>
+                  <div className="muted">Create a <strong>HEADLESSGM</strong> category with <strong>#headlessgm</strong>, <strong>#recruitment</strong> and <strong>#officer-ops</strong>, connect the control channel, and publish the member panel automatically.</div>
                 </div>
 
                 <form action={provisionDiscordWorkspace} style={{ marginBottom: 14 }}>

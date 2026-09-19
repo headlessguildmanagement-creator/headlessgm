@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../lib/supabase/server'
 import { resolveGuild, withGuild } from '../../lib/guild-context'
 import { havocFeatherGroupForInstant } from '../../lib/havoc-rules.mjs'
+import { selectPuppetTurns } from '../../lib/puppet-engine.mjs'
 import AppShell from '../../components/app-shell'
 import { signOut } from './actions'
 
@@ -19,7 +20,7 @@ export default async function AppHome({ searchParams }) {
   const [{ data: plan }, { data: preset }, { data: members }, { data: events }, openApps, pendingMembers, { data: discord }, { data: rules }, { data: queue }] = await Promise.all([
     supabase.from('plans').select('display_name,active_member_limit').eq('code', guild.plan_code).single(),
     supabase.from('game_presets').select('name,raid_size,party_size,parties_per_raid').eq('id', guild.game_preset_id).single(),
-    supabase.from('guild_members').select('id,ign,job_code,combat_role,feather_group,status').eq('guild_id', guild.id).eq('status', 'active').order('ign'),
+    supabase.from('guild_members').select('id,ign,job_code,combat_role,feather_group,status,created_at').eq('guild_id', guild.id).eq('status', 'active').order('ign'),
     supabase.from('guild_events').select('id,name,event_type,starts_at,loa_deadline,status').eq('guild_id', guild.id).not('status', 'in', '(completed,cancelled)').order('starts_at', { ascending: true }).limit(12),
     supabase.from('guild_applications').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).not('status', 'in', '(rejected,joined)'),
     supabase.from('guild_members').select('id', { count: 'exact', head: true }).eq('guild_id', guild.id).eq('status', 'pending'),
@@ -36,15 +37,30 @@ export default async function AppHome({ searchParams }) {
   let loas = []
   let absences = []
   let slots = []
+  let puppetState = { current_cycle: 1 }
+  let puppetExclusions = []
+  let deferred = []
+  let approvedAppeals = []
+  let cycleProgress = []
   if (currentEvent) {
     const rows = await Promise.all([
       supabase.from('event_loas').select('guild_member_id').eq('event_id', currentEvent.id).is('cancelled_at', null),
       supabase.from('event_absences').select('guild_member_id').eq('event_id', currentEvent.id),
       supabase.from('event_lineup_slots').select('raid_code,party_no,slot_no,guild_member_id').eq('event_id', currentEvent.id).not('guild_member_id', 'is', null),
+      supabase.from('guild_puppet_state').select('current_cycle').eq('guild_id', guild.id).maybeSingle(),
+      supabase.from('event_puppet_exclusions').select('guild_member_id').eq('event_id', currentEvent.id),
+      supabase.from('puppet_deferred_turns').select('id,guild_member_id,source_cycle,created_at,consumed_at').eq('guild_id', guild.id).is('consumed_at', null),
+      supabase.from('puppet_appeals').select('id,guild_member_id,source_cycle,status,submitted_at,decided_at,consumed_at').eq('guild_id', guild.id).eq('status','approved').is('consumed_at', null),
     ])
     loas = rows[0].data || []
     absences = rows[1].data || []
     slots = rows[2].data || []
+    puppetState = rows[3].data || { current_cycle: 1 }
+    puppetExclusions = rows[4].data || []
+    deferred = rows[5].data || []
+    approvedAppeals = rows[6].data || []
+    const progressResult = await supabase.from('puppet_cycle_progress').select('guild_member_id').eq('guild_id', guild.id).eq('cycle', Number(puppetState.current_cycle || 1))
+    cycleProgress = progressResult.data || []
   }
 
   const unavailable = new Set([...loas.map((row) => row.guild_member_id), ...absences.map((row) => row.guild_member_id)])
@@ -81,10 +97,22 @@ export default async function AppHome({ searchParams }) {
 
   const featherCounts = [1,2,3,4].map((group) => ({ group, count: roster.filter((member) => member.feather_group === group).length }))
   const puppetTake = currentEvent?.event_type === 'emperium_overrun' ? 20 : 8
-  const puppetNext = (queue || [])
-    .map((row) => memberMap.get(row.guild_member_id))
-    .filter((member) => member && !unavailable.has(member.id))
-    .slice(0, puppetTake)
+  const puppetSelection = currentEvent && rules?.puppet_mode === 'round_robin'
+    ? selectPuppetTurns({
+        members: roster,
+        queue: queue || [],
+        unavailableIds: unavailable,
+        cannotBidIds: new Set(puppetExclusions.map((row) => row.guild_member_id)),
+        currentCycle: Number(puppetState.current_cycle || 1),
+        completedIds: new Set(cycleProgress.map((row) => row.guild_member_id)),
+        deferred,
+        appeals: approvedAppeals,
+        requestedCount: puppetTake,
+        eventStartsAt: currentEvent.starts_at,
+        timeZone: guild.timezone || 'Asia/Manila',
+      })
+    : { assignments: [] }
+  const puppetNext = puppetSelection.assignments.map((row) => ({ ...row, member: memberMap.get(row.guild_member_id) })).filter((row) => row.member)
 
   const operations = [
     ['Events & Attendance', `${events?.length || 0} active/upcoming events. LOA, availability and event state live here.`, withGuild('/app/events', guild.slug)],
@@ -155,8 +183,8 @@ export default async function AppHome({ searchParams }) {
       </div>
 
       {rules?.puppet_mode === 'round_robin' ? <section className="panel panel-pad">
-        <div className="section-head"><div><h2>Next Puppet bidders</h2><p>Tentative current-event view. LOA and no-show are skipped without moving their persistent queue position.</p></div><span className="pill">NEXT {puppetTake}</span></div>
-        <div className="puppet-next-list">{puppetNext.map((member, index) => <span className="puppet-next-item" key={member.id}><small>{index + 1}</small><strong>{member.ign}</strong></span>)}</div>
+        <div className="section-head"><div><h2>Next Puppet bidders</h2><p>Tentative current-event view using make-ups → approved appeals → current cycle → rollover. LOA/no-show, Cannot Bid and 96H are skipped without moving persistent queue position.</p></div><span className="pill">CYCLE {Number(puppetState.current_cycle || 1)} · NEXT {puppetTake}</span></div>
+        <div className="puppet-next-list">{puppetNext.map((row, index) => <span className="puppet-next-item" key={row.member.id}><small>{index + 1}</small><strong>{row.member.ign}</strong><em>{row.turn_kind === 'deferred' ? 'MAKE-UP' : row.turn_kind === 'appeal' ? 'APPEAL' : row.turn_kind === 'rollover' ? 'NEXT CYCLE' : 'CURRENT'}</em></span>)}</div>
         {!puppetNext.length ? <p className="muted">No eligible Puppet bidders are currently available.</p> : null}
       </section> : null}
 
