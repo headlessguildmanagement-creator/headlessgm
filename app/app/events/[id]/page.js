@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import AppShell from '../../../../components/app-shell'
-import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember, setEventAbsence } from '../actions'
+import { updateEventStatus, fileMyLoa, cancelMyLoa, assignLineupMember, setEventAbsence, importPreviousLineup, publishLineup } from '../actions'
 
 export default async function EventDetailPage({ params, searchParams }) {
   const { id } = await params
@@ -16,7 +16,7 @@ export default async function EventDetailPage({ params, searchParams }) {
 
   const { data: event } = await supabase.from('guild_events').select('*').eq('id', id).maybeSingle()
   if (!event) notFound()
-  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id,game_preset_id').eq('id', event.guild_id).single()
+  const { data: guild } = await supabase.from('guilds').select('id,name,slug,owner_user_id,game_preset_id,timezone').eq('id', event.guild_id).single()
   const membership = await supabase.from('guild_users').select('role').eq('guild_id', event.guild_id).eq('user_id', userId).maybeSingle()
   const canManage = guild?.owner_user_id === userId || ['owner','officer'].includes(membership.data?.role)
 
@@ -38,6 +38,24 @@ export default async function EventDetailPage({ params, searchParams }) {
   const eligible = expected.filter((member) => !absenceIds.has(member.id))
   const assignedIds = new Set((slots || []).filter((slot) => slot.guild_member_id).map((slot) => slot.guild_member_id))
   const available = eligible.filter((member) => !assignedIds.has(member.id))
+  const jobBreakdown = [...(members || []).reduce((map, member) => {
+    const label = jobMap[member.job_code] || member.job_code || 'Job not set'
+    map.set(label, (map.get(label) || 0) + 1)
+    return map
+  }, new Map()).entries()].sort((a, b) => a[0].localeCompare(b[0]))
+
+  const supportWarnings = []
+  for (const raid of ['main', 'sub']) {
+    for (let party = 1; party <= 8; party += 1) {
+      const partyMembers = (slots || [])
+        .filter((slot) => slot.raid_code === raid && slot.party_no === party && slot.guild_member_id)
+        .map((slot) => memberMap.get(slot.guild_member_id))
+        .filter(Boolean)
+      if (partyMembers.length && !partyMembers.some((member) => String(member.combat_role || '').toLowerCase() === 'support')) {
+        supportWarnings.push(`${raid === 'main' ? 'Main' : 'Sub'} Party ${party}`)
+      }
+    }
+  }
 
   const discordIdentity = (await supabase.auth.getUser()).data?.user?.identities?.find((identity) => identity.provider === 'discord')
   const myDiscordId = discordIdentity?.identity_data?.sub || discordIdentity?.identity_id || discordIdentity?.id || null
@@ -55,7 +73,7 @@ export default async function EventDetailPage({ params, searchParams }) {
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
       {canManage ? <Link href={`/app/events/${id}/auction`} className="button">Auction {auctionRun ? `· ${auctionRun.status}` : ''}</Link> : null}
-      <Link href="/app/events" className="button ghost">All events</Link>
+      <Link href={`/${guild.slug}/events`} className="button ghost">All events</Link>
     </div>
   )
 
@@ -83,6 +101,10 @@ export default async function EventDetailPage({ params, searchParams }) {
             {['upcoming','loa_open','lineup','live','auction','completed','cancelled'].map((status) => <button className={event.status === status ? 'button' : 'button ghost'} key={status} type="submit" name="status" value={status} disabled={event.status === status}>{status.replaceAll('_',' ')}</button>)}
           </form>
         ) : null}
+        {canManage ? <div className="operator-actions">
+          <form action={importPreviousLineup}><input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><button type="submit" className="button ghost">Use previous lineup</button></form>
+          <form action={publishLineup}><input type="hidden" name="event_id" value={event.id} /><input type="hidden" name="guild_id" value={event.guild_id} /><button type="submit" className="button">Publish Lineup to Discord</button></form>
+        </div> : null}
       </section>
 
       {myMember ? (
@@ -113,6 +135,8 @@ export default async function EventDetailPage({ params, searchParams }) {
         </div>
       </section>
 
+      {canManage && supportWarnings.length ? <div className="notice error lineup-support-warning"><strong>Party support warning:</strong> {supportWarnings.join(', ')} currently {supportWarnings.length === 1 ? 'has' : 'have'} assigned players but no Support-role member.</div> : null}
+
       {canManage ? ['main','sub'].map((raid) => (
         <section key={raid} className="panel panel-pad">
           <div className="section-head"><div><h2>{raid === 'main' ? 'Main 40' : 'Sub'}</h2><p>8 parties × 5. A member can occupy only one event slot; moving them frees their previous slot.</p></div><span className="pill">{(slots || []).filter((slot) => slot.raid_code === raid && slot.guild_member_id).length} ASSIGNED</span></div>
@@ -142,7 +166,8 @@ export default async function EventDetailPage({ params, searchParams }) {
 
       <section className="panel panel-pad">
         <div className="section-head"><div><h2>Available pool</h2><p>Expected members not on LOA/no-show and not currently assigned to Main or Sub.</p></div><span className="pill">{available.length} AVAILABLE</span></div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{available.map((member) => <span key={member.id} className="pill">{member.ign} · {jobMap[member.job_code] || member.job_code || '—'}</span>)}</div>
+        <div className="job-breakdown">{jobBreakdown.map(([job, count]) => <span className="job-breakdown-item" key={job}><strong>{job}</strong><small>{count}</small></span>)}</div>
+        <div className="available-pool">{available.map((member) => <span key={member.id} className="pill">{member.ign} · {jobMap[member.job_code] || member.job_code || '—'}</span>)}</div>
         {!available.length ? <p className="muted" style={{ marginBottom: 0 }}>Everyone eligible is assigned.</p> : null}
       </section>
     </AppShell>

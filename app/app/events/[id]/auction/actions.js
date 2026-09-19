@@ -6,6 +6,7 @@ import { createClient } from '../../../../../lib/supabase/server'
 import { sendChannelMessage } from '../../../../../lib/discord/server'
 import { allocateCapped, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
 import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
+import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
 function qty(value) { const n = Number(value); return Number.isInteger(n) && n >= 0 ? n : 0 }
@@ -49,6 +50,9 @@ export async function generateAuctionDraft(formData) {
     if (rules.feather_mode === 'four_group' && !activeGroup && guild.game_preset_id === 'rooc') {
       activeGroup = havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
     }
+    if (rules.feather_mode === 'four_group' && ['guild_league','emperium_overrun'].includes(event.event_type)) {
+      activeGroup = havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
+    }
     if (rules.feather_mode === 'four_group' && ![1,2,3,4].includes(activeGroup)) throw new Error('Choose the active Feather group for this event')
 
     const unavailable = new Set([...(loas || []).map((x) => x.guild_member_id), ...(absences || []).map((x) => x.guild_member_id)])
@@ -78,35 +82,38 @@ export async function generateAuctionDraft(formData) {
       active_feather_group_id: activeFeatherGroupId,
       ffa: {},
       unassigned: {},
+      random_orders: {},
     }
 
     for (const category of ['light_dark_feather','time_space_feather']) {
       const total = quantities[category]
       if (rules.feather_mode === 'ffa') {
-        output.ffa[category] = { quantity: total, eligible_member_ids: eligible.map((m) => m.id), cap: caps[category] }
+        output.ffa[category] = { quantity: total, eligible_member_ids: caps[category] === 0 ? [] : eligible.map((m) => m.id), cap: caps[category] }
         continue
       }
       const pool = rules.feather_mode === 'four_group' ? eligible.filter((member) => member.feather_group === activeGroup) : shuffleWith(eligible)
+      if (rules.feather_mode === 'random') output.random_orders[category] = pool.map((member) => member.id)
       const result = allocateCapped(category, total, pool, caps[category], rules.feather_mode === 'random' ? 'rotation' : 'base')
       allocations.push(...result.rows)
       unassigned[category] = result.unassigned
     }
 
     if (rules.puppet_mode === 'ffa') {
-      output.ffa.puppet_fragment = { quantity: quantities.puppet_fragment, eligible_member_ids: eligible.map((m) => m.id), cap: caps.puppet_fragment }
+      output.ffa.puppet_fragment = { quantity: quantities.puppet_fragment, eligible_member_ids: caps.puppet_fragment === 0 ? [] : eligible.map((m) => m.id), cap: caps.puppet_fragment }
     } else {
       let puppetPool
       if (rules.puppet_mode === 'round_robin') {
         puppetPool = (queue || []).map((row) => memberMap.get(row.guild_member_id)).filter((member) => member && !unavailable.has(member.id))
       } else {
         puppetPool = shuffleWith(eligible)
+        output.random_orders.puppet_fragment = puppetPool.map((member) => member.id)
       }
       const result = allocateCapped('puppet_fragment', quantities.puppet_fragment, puppetPool, caps.puppet_fragment, rules.puppet_mode === 'round_robin' ? 'queue' : 'rotation')
       allocations.push(...result.rows)
       unassigned.puppet_fragment = result.unassigned
     }
 
-    output.ffa.illusion_fragment = { quantity: quantities.illusion_fragment, eligible_member_ids: eligible.map((m) => m.id), cap: caps.illusion_fragment }
+    output.ffa.illusion_fragment = { quantity: quantities.illusion_fragment, eligible_member_ids: caps.illusion_fragment === 0 ? [] : eligible.map((m) => m.id), cap: caps.illusion_fragment }
     output.unassigned = unassigned
 
     const { data: runId, error } = await supabase.rpc('replace_auction_draft', {
@@ -132,7 +139,7 @@ export async function publishAuction(formData) {
   const runId = String(formData.get('auction_run_id') || '')
   let url = `/app/events/${eventId}/auction`
   try {
-    const { supabase, event } = await context(eventId)
+    const { supabase, event, guild } = await context(eventId)
     const [{ data: run }, { data: allocations }, { data: members }, { data: connection }] = await Promise.all([
       supabase.from('auction_runs').select('id,status,input_data,generated_output,rules_snapshot').eq('id', runId).eq('event_id', eventId).single(),
       supabase.from('auction_allocations').select('guild_member_id,category,quantity,source').eq('auction_run_id', runId).order('category'),

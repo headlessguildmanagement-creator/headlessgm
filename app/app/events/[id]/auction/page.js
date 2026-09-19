@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../../lib/supabase/server'
 import AppShell from '../../../../../components/app-shell'
 import { finalizeAuction, generateAuctionDraft, publishAuction } from './actions'
+import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 
 const labels = {
   light_dark_feather: 'Light / Dark Feather',
@@ -21,7 +22,7 @@ export default async function AuctionPage({ params, searchParams }) {
 
   const { data: event } = await supabase.from('guild_events').select('*').eq('id', id).maybeSingle()
   if (!event) notFound()
-  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id').eq('id', event.guild_id).single()
+  const { data: guild } = await supabase.from('guilds').select('id,name,slug,owner_user_id,timezone').eq('id', event.guild_id).single()
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!manager) redirect(`/app/events/${id}`)
 
@@ -43,9 +44,13 @@ export default async function AuctionPage({ params, searchParams }) {
   const eligibleCount = (members || []).filter((member) => !unavailable.has(member.id)).length
   const input = run?.input_data?.quantities || {}
   const ffa = run?.generated_output?.ffa || {}
+  const automaticFeatherGroup = rules.feather_mode === 'four_group' && ['guild_league','emperium_overrun'].includes(event.event_type)
+    ? havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
+    : null
+  const randomOrders = run?.generated_output?.random_orders || {}
 
   return (
-    <AppShell guildName={guild.name} eyebrow="AUCTION COMMAND" title={`${event.name} · Auction`} activeHref="/app/events" actions={<Link href={`/app/events/${id}`} className="button ghost">Back to event</Link>}>
+    <AppShell guildName={guild.name} eyebrow="AUCTION COMMAND" title={`${event.name} · Auction`} activeHref="/app/events" actions={<Link href={`/${guild.slug}/events/${id}`} className="button ghost">Back to event</Link>}>
       {query?.error ? <div className="notice error">{String(query.error)}</div> : null}
       {query?.success ? <div className="notice success">{String(query.success)}</div> : null}
 
@@ -67,7 +72,7 @@ export default async function AuctionPage({ params, searchParams }) {
             <label className="field"><span>Time / Space Feather quantity</span><input type="number" name="time_space_feather" min="0" step="1" defaultValue={input.time_space_feather ?? 0} /></label>
             <label className="field"><span>Puppet Fragment quantity</span><input type="number" name="puppet_fragment" min="0" step="1" defaultValue={input.puppet_fragment ?? 0} /></label>
             <label className="field"><span>Illusion Fragment quantity</span><input type="number" name="illusion_fragment" min="0" step="1" defaultValue={input.illusion_fragment ?? 0} /></label>
-            {rules.feather_mode === 'four_group' ? <label className="field"><span>Active Feather group</span><select name="active_feather_group" defaultValue={String(run?.input_data?.active_feather_group || 1)}><option value="1">Group 1</option><option value="2">Group 2</option><option value="3">Group 3</option><option value="4">Group 4</option></select></label> : null}
+            {rules.feather_mode === 'four_group' ? automaticFeatherGroup ? <><input type="hidden" name="active_feather_group" value={automaticFeatherGroup} /><div className="notice full"><strong>Feather Group {automaticFeatherGroup}</strong> is selected automatically from the proven ROOC calendar rotation for this event date.</div></> : <label className="field"><span>Active Feather group</span><select name="active_feather_group" defaultValue={String(run?.input_data?.active_feather_group || 1)}><option value="1">Group 1</option><option value="2">Group 2</option><option value="3">Group 3</option><option value="4">Group 4</option></select></label> : null}
             <div className="full"><button type="submit" className="button">{run ? 'Regenerate draft' : 'Generate draft'}</button></div>
           </form>
         )}
@@ -102,6 +107,13 @@ export default async function AuctionPage({ params, searchParams }) {
           {Object.values(run.generated_output?.unassigned || {}).some((value) => Number(value) > 0) ? (
             <div className="notice error">Some quantities could not be assigned because the eligible pool hit its configured caps. Review the draft before publishing.</div>
           ) : null}
+
+          {Object.keys(randomOrders).length ? <section className="panel panel-pad">
+            <div className="section-head"><div><h2>Random draw audit</h2><p>The draw order is frozen with this draft. Review and publish never rerandomize it.</p></div></div>
+            <div className="ops-list">
+              {Object.entries(randomOrders).map(([category, ids]) => <div className="ops-row" key={category}><strong>{labels[category] || category}</strong><p>{(ids || []).map((memberId) => memberMap.get(memberId)?.ign || 'Unknown').join(' → ') || 'No eligible bidders'}</p><span>FROZEN</span></div>)}
+            </div>
+          </section> : null}
 
           <section className="panel panel-pad">
             <div className="section-head"><div><h2>Officer review</h2><p>Publishing locks the draft. Finalization is the only step that advances persistent Puppet queue state.</p></div></div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import { sendChannelMessage } from '../../../lib/discord/server'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 240)) }
 
@@ -46,7 +47,7 @@ async function requireManagerGuild(supabase, guildId, userId) {
 }
 
 async function requireEventInGuild(supabase, eventId, guildId) {
-  const { data: event } = await supabase.from('guild_events').select('id,guild_id,status').eq('id', eventId).eq('guild_id', guildId).maybeSingle()
+  const { data: event } = await supabase.from('guild_events').select('id,guild_id,status,name,event_type,starts_at').eq('id', eventId).eq('guild_id', guildId).maybeSingle()
   if (!event) throw new Error('Event does not belong to this guild')
   return event
 }
@@ -222,6 +223,91 @@ export async function assignLineupMember(formData) {
     url += `?success=${safe('Lineup updated.')}`
   } catch (error) {
     url += `?error=${safe(error.message || 'Could not update lineup.')}`
+  }
+  redirect(url)
+}
+
+
+export async function importPreviousLineup(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const guildId = String(formData.get('guild_id') || '')
+  const { supabase, userId } = await requireUser()
+  let url = `/app/events/${eventId}`
+  try {
+    await requireManagerGuild(supabase, guildId, userId)
+    const current = await requireEventInGuild(supabase, eventId, guildId)
+    const { data: previous } = await supabase.from('guild_events').select('id,name,starts_at').eq('guild_id', guildId).lt('starts_at', current.starts_at).not('status', 'eq', 'cancelled').order('starts_at', { ascending: false }).limit(1).maybeSingle()
+    if (!previous) throw new Error('No previous guild event is available to import')
+
+    const [{ data: previousSlots }, { data: activeMembers }, { data: loas }, { data: absences }] = await Promise.all([
+      supabase.from('event_lineup_slots').select('raid_code,party_no,slot_no,guild_member_id').eq('event_id', previous.id).not('guild_member_id', 'is', null),
+      supabase.from('guild_members').select('id').eq('guild_id', guildId).eq('status', 'active'),
+      supabase.from('event_loas').select('guild_member_id').eq('event_id', eventId).is('cancelled_at', null),
+      supabase.from('event_absences').select('guild_member_id').eq('event_id', eventId),
+    ])
+
+    const active = new Set((activeMembers || []).map((row) => row.id))
+    const unavailable = new Set([...(loas || []).map((row) => row.guild_member_id), ...(absences || []).map((row) => row.guild_member_id)])
+    const seen = new Set()
+    const rows = (previousSlots || []).filter((slot) => active.has(slot.guild_member_id) && !unavailable.has(slot.guild_member_id) && !seen.has(slot.guild_member_id)).map((slot) => {
+      seen.add(slot.guild_member_id)
+      return { event_id: eventId, raid_code: slot.raid_code, party_no: slot.party_no, slot_no: slot.slot_no, guild_member_id: slot.guild_member_id, assigned_by_user_id: userId, updated_at: new Date().toISOString() }
+    })
+
+    const { error: clearError } = await supabase.from('event_lineup_slots').delete().eq('event_id', eventId)
+    if (clearError) throw clearError
+    if (rows.length) {
+      const { error: insertError } = await supabase.from('event_lineup_slots').insert(rows)
+      if (insertError) throw insertError
+    }
+
+    revalidatePath(`/app/events/${eventId}`)
+    url += `?success=${safe(`Imported ${rows.length} eligible assignments from ${previous.name}. LOA, no-show and inactive members were skipped.`)}`
+  } catch (error) {
+    url += `?error=${safe(error.message || 'Could not import the previous lineup.')}`
+  }
+  redirect(url)
+}
+
+export async function publishLineup(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const guildId = String(formData.get('guild_id') || '')
+  const { supabase, userId } = await requireUser()
+  let url = `/app/events/${eventId}`
+  try {
+    const guild = await requireManagerGuild(supabase, guildId, userId)
+    const event = await requireEventInGuild(supabase, eventId, guildId)
+    const [{ data: slots }, { data: members }, { data: connection }] = await Promise.all([
+      supabase.from('event_lineup_slots').select('raid_code,party_no,slot_no,guild_member_id').eq('event_id', eventId).order('raid_code').order('party_no').order('slot_no'),
+      supabase.from('guild_members').select('id,ign').eq('guild_id', guildId),
+      supabase.from('discord_connections').select('metadata,bot_installed').eq('guild_id', guildId).maybeSingle(),
+    ])
+    const channelId = connection?.metadata?.channel_id
+    if (!connection?.bot_installed || !channelId) throw new Error('Connect Discord and choose a HeadlessGM control channel before publishing')
+
+    const memberMap = new Map((members || []).map((member) => [member.id, member]))
+    const fields = []
+    for (const raid of ['main', 'sub']) {
+      for (let party = 1; party <= 8; party += 1) {
+        const partySlots = (slots || []).filter((slot) => slot.raid_code === raid && slot.party_no === party)
+        const names = Array.from({ length: 5 }, (_, index) => {
+          const slot = partySlots.find((row) => row.slot_no === index + 1)
+          const member = slot?.guild_member_id ? memberMap.get(slot.guild_member_id) : null
+          return member ? `${index + 1}. ${member.ign}` : `${index + 1}. —`
+        })
+        fields.push({ name: `${raid === 'main' ? 'MAIN' : 'SUB'} · Party ${party}`, value: names.join('\n'), inline: true })
+      }
+    }
+
+    await sendChannelMessage(channelId, {
+      embeds: [{ title: `${event.name} · Final Lineup`, description: `Officer-published lineup · ${new Date(event.starts_at).toLocaleString('en-US', { timeZone: guild.timezone || 'Asia/Manila' })}`, fields, footer: { text: 'HeadlessGM · lineup publication' } }],
+      allowed_mentions: { parse: [] },
+    })
+
+    revalidatePath(`/app/events/${eventId}`)
+    url += `?success=${safe('Lineup published to the configured Discord channel.')}`
+  } catch (error) {
+    url += `?error=${safe(error.message || 'Could not publish lineup.')}`
   }
   redirect(url)
 }
