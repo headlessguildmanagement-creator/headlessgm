@@ -19,7 +19,7 @@ async function context(eventId) {
 
   const { data: event } = await supabase.from('guild_events').select('id,guild_id,name,status,event_type,starts_at').eq('id', eventId).maybeSingle()
   if (!event) throw new Error('Event not found')
-  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id,game_preset_id,timezone,slug').eq('id', event.guild_id).single()
+  const { data: guild } = await supabase.from('guilds').select('id,name,owner_user_id,game_preset_id,timezone,slug,plan_code').eq('id', event.guild_id).single()
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!manager) throw new Error('Officer access required')
   return { supabase, userId, event, guild }
@@ -240,6 +240,7 @@ export async function publishTentativeBidders(formData) {
   let url = `/app/events/${eventId}/auction`
   try {
     const { supabase, event, guild } = await context(eventId)
+    if (guild.plan_code === 'free') throw new Error('Discord auction publishing requires the GUILD plan')
     const data = await loadAuctionInputs(supabase, event, guild)
     const unavailable = new Set([...data.loas.map((x) => x.guild_member_id), ...data.absences.map((x) => x.guild_member_id)])
     const puppetBlocked = new Set(data.puppetExclusions.map((x) => x.guild_member_id))

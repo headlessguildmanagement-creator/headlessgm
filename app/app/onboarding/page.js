@@ -21,7 +21,7 @@ export default async function OnboardingPage({ searchParams }) {
           <div>
             <p className="eyebrow">HEADLESSGM SETUP</p>
             <h1 style={{ fontSize: 38, margin: '4px 0 8px' }}>Set up your guild.</h1>
-            <p className="lede" style={{ fontSize: 16, margin: 0 }}>Use the proven ROOC/Havoc operating model as a starting point. Everything here remains editable later in Settings.</p>
+            <p className="lede" style={{ fontSize: 16, margin: 0 }}>Start on FREE with the simplest HeadlessGM workflow. GUILD and COMMANDER unlock recruitment, Discord and deeper operating rules.</p>
           </div>
           <ThemeToggle />
         </header>
@@ -41,23 +41,15 @@ export default async function OnboardingPage({ searchParams }) {
           <section className="panel panel-pad">
             <div className="section-head"><div><h2>2. Auction presets</h2><p>These choices determine roster fields, eligibility behavior and the format HeadlessGM expects during import.</p></div></div>
             <div className="form-grid">
-              <label className="field"><span>Feather auction</span><select name="feather_mode" defaultValue="ffa"><option value="ffa">Free For All</option><option value="four_group">4 Group Division</option><option value="random">Random</option><option value="custom" disabled>Custom · COMMANDER</option></select></label>
-              <label className="field"><span>Puppet auction</span><select name="puppet_mode" defaultValue="round_robin"><option value="ffa">Free For All</option><option value="round_robin">Round Robin · whole guild</option><option value="random">Random</option><option value="custom" disabled>Custom · COMMANDER</option></select></label>
+              <label className="field"><span>Feather auction</span><select name="feather_mode" defaultValue="ffa"><option value="ffa">Free For All</option><option value="random">Random</option></select></label>
+              <label className="field"><span>Puppet auction</span><select name="puppet_mode" defaultValue="ffa"><option value="ffa">Free For All</option><option value="random">Random</option></select></label>
             </div>
           </section>
 
-          <section className="panel panel-pad">
-            <div className="section-head"><div><h2>3. Per-person auction limits</h2><p>Leave a field blank for no configured cap. Random and preset allocation always filter eligibility before applying these limits.</p></div></div>
-            <div className="form-grid">
-              <label className="field"><span>Light / Dark Feather</span><input type="number" name="light_dark_feather_cap" min="0" step="1" placeholder="Unlimited" /></label>
-              <label className="field"><span>Time / Space Feather</span><input type="number" name="time_space_feather_cap" min="0" step="1" placeholder="Unlimited" /></label>
-              <label className="field"><span>Puppet Fragments</span><input type="number" name="puppet_fragment_cap" min="0" step="1" placeholder="Unlimited" /></label>
-              <label className="field"><span>Illusion Fragments</span><input type="number" name="illusion_fragment_cap" min="0" step="1" placeholder="Unlimited" /></label>
-            </div>
-          </section>
+          <section className="panel panel-pad"><p className="eyebrow">FREE</p><h2 style={{marginTop:6}}>Simple auction setup</h2><p className="muted">FREE includes FFA and Random. Per-person reward caps, 4 Group Feather and Puppet Round Robin unlock on GUILD. Custom rules unlock on COMMANDER.</p></section>
 
           <section className="panel panel-pad">
-            <div className="section-head"><div><h2>4. Attendance & LOA</h2><p>Havoc defaults to everyone attending unless they file LOA.</p></div></div>
+            <div className="section-head"><div><h2>3. Attendance & LOA</h2><p>Havoc defaults to everyone attending unless they file LOA.</p></div></div>
             <div className="form-grid">
               <label className="field"><span>Attendance rule</span><select name="attendance_mode" defaultValue="assume_attending"><option value="assume_attending">Assume attending unless LOA</option><option value="rsvp_required">RSVP required</option></select></label>
               <label className="field"><span>LOA deadline on event day</span><input type="time" name="loa_deadline_local_time" defaultValue="19:30" /></label>
@@ -65,7 +57,7 @@ export default async function OnboardingPage({ searchParams }) {
           </section>
 
           <section className="panel panel-pad">
-            <div className="section-head"><div><h2>5. Roster comes next</h2><p>After this step you can upload CSV/XML or add members manually. The importer supports IGN, Class, CombatRole, GuildRank, FeatherGroup and PuppetOrder.</p></div></div>
+            <div className="section-head"><div><h2>4. Roster comes next</h2><p>After this step you can upload CSV/XML or add members manually. The importer supports IGN, Class, CombatRole, GuildRank, FeatherGroup and PuppetOrder.</p></div></div>
             <div className="notice">You can skip the roster, Discord and recruitment steps and return to them later from Settings.</div>
           </section>
 

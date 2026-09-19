@@ -13,9 +13,9 @@ export default async function AppHome({ searchParams }) {
   if (authError || !authData?.claims?.sub) redirect('/login')
 
   const query = await searchParams
-  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,plan_code,game_preset_id,timezone,created_at')
+  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,plan_code,game_preset_id,timezone,created_at,settings')
   if (!guild) redirect('/app/onboarding')
-  if (!query?.guild) redirect(`/${guild.slug}`)
+  if (!query?.guild) redirect(`/${guild.slug}/overview`)
 
   const [{ data: plan }, { data: preset }, { data: members }, { data: events }, openApps, pendingMembers, { data: discord }, { data: rules }, { data: queue }] = await Promise.all([
     supabase.from('plans').select('display_name,active_member_limit').eq('code', guild.plan_code).single(),
@@ -114,27 +114,29 @@ export default async function AppHome({ searchParams }) {
     : { assignments: [] }
   const puppetNext = puppetSelection.assignments.map((row) => ({ ...row, member: memberMap.get(row.guild_member_id) })).filter((row) => row.member)
 
+  const overviewModules = guild.plan_code === 'commander' || guild.plan_code === 'beta' ? new Set(guild.settings?.overview?.modules || ['stats','current_event','alerts','events','feather','puppet','operations']) : new Set(['stats','current_event','alerts','events','feather','puppet','operations'])
+
   const operations = [
     ['Events & Attendance', `${events?.length || 0} active/upcoming events. LOA, availability and event state live here.`, withGuild('/app/events', guild.slug)],
     ['Lineup Builder', `${preset?.raid_size || 40}-player Main · ${preset?.parties_per_raid || 8} parties × ${preset?.party_size || 5}.`, currentEvent ? `/${guild.slug}/events/${currentEvent.id}` : withGuild('/app/events', guild.slug)],
     ['Auction Rules', 'Feather and Puppet presets, Random eligibility and per-person caps.', withGuild('/app/settings/auction', guild.slug)],
-    ['Recruitment', `${openApps.count ?? 0} open applications · public application page /${guild.slug}/apply`, withGuild('/app/recruitment', guild.slug)],
+    ...(guild.plan_code === 'free' ? [] : [['Recruitment', `${openApps.count ?? 0} open applications · public recruitment /${guild.slug}`, withGuild('/app/recruitment', guild.slug)]]),
     ['Members', `${activeCount} active · ${pendingMembers.count ?? 0} pending. Persistent identity and Discord links.`, withGuild('/app/members', guild.slug)],
-    ['Discord', discord?.bot_installed ? `Connected to ${discord.discord_guild_name}${discord.metadata?.channel_name ? ` · #${discord.metadata.channel_name}` : ''}` : 'Not connected. Install or reconnect HeadlessGM and choose its channel.', withGuild('/app/settings/discord', guild.slug)],
+    ...(guild.plan_code === 'free' ? [] : [['Discord', discord?.bot_installed ? `Connected to ${discord.discord_guild_name}${discord.metadata?.channel_name ? ` · #${discord.metadata.channel_name}` : ''}` : 'Not connected. Install or reconnect HeadlessGM and choose its channel.', withGuild('/app/settings/discord', guild.slug)]]),
   ]
 
   const actions = <form action={signOut}><button type="submit" className="button ghost">Sign out</button></form>
 
   return (
     <AppShell guildName={guild.name} guildSlug={guild.slug} title="Guild overview" activeHref="/app" actions={actions}>
-      <section className="stats">
+      {overviewModules.has('stats') ? <section className="stats">
         <div className="stat"><label>ACTIVE MEMBERS</label><strong>{activeCount} / {activeLimit}</strong><small>{pendingMembers.count ?? 0} pending</small></div>
         <div className="stat"><label>CURRENT EVENT ATTENDANCE</label><strong>{currentEvent ? attending : '—'}</strong><small>{currentEvent ? `${unavailable.size} LOA / no-show` : 'No active event'}</small></div>
         <div className="stat"><label>LINEUP ASSIGNED</label><strong>{currentEvent ? assigned.size : '—'}</strong><small>{currentEvent ? `${Math.max(0, 80 - assigned.size)} of 80 slots open` : 'No active event'}</small></div>
         <div className="stat"><label>PLAN</label><strong>{plan?.display_name || 'BETA'}</strong><small>/{guild.slug} · {guild.timezone}</small></div>
-      </section>
+      </section> : null}
 
-      {currentEvent ? <section className="panel panel-pad current-event-command">
+      {overviewModules.has('current_event') ? (currentEvent ? <section className="panel panel-pad current-event-command">
         <div className="section-head">
           <div><p className="eyebrow">CURRENT EVENT</p><h2>{currentEvent.name}</h2><p>{currentEvent.event_type.replaceAll('_',' ').toUpperCase()} · {new Date(currentEvent.starts_at).toLocaleString('en-US', { timeZone: guild.timezone })}</p></div>
           <div className="event-command-actions">
@@ -149,9 +151,9 @@ export default async function AppHome({ searchParams }) {
           <div><small>LOA</small><strong>{loas.length}</strong></div>
           <div><small>No-show</small><strong>{absences.length}</strong></div>
         </div>
-      </section> : <div className="notice">No active/upcoming event exists yet. Create one from Events.</div>}
+      </section> : <div className="notice">No active/upcoming event exists yet. Create one from Events.</div>) : null}
 
-      {(rosterAlerts.length || supportAlerts.length) ? <section className="panel panel-pad">
+      {overviewModules.has('alerts') && (rosterAlerts.length || supportAlerts.length) ? <section className="panel panel-pad">
         <div className="section-head"><div><h2>Roster and lineup checks</h2><p>Havoc-style officer checks for missing roster information and started parties without Support.</p></div><span className="pill">{rosterAlerts.length + supportAlerts.length} ALERT{rosterAlerts.length + supportAlerts.length === 1 ? '' : 'S'}</span></div>
         <div className="officer-alert-columns">
           <div><h3>Missing member information</h3>
@@ -164,34 +166,34 @@ export default async function AppHome({ searchParams }) {
         </div>
       </section> : null}
 
-      <div className="overview-columns">
-        <section className="panel">
+      {(overviewModules.has('events') || overviewModules.has('feather')) ? <div className="overview-columns">
+        {overviewModules.has('events') ? <section className="panel">
           <div className="panel-pad section-head"><div><h2>Current and upcoming events</h2><p>Open an event to manage LOA, lineup, auction and finalization.</p></div><Link href={withGuild('/app/events', guild.slug)} className="button ghost">All events</Link></div>
           <div className="ops-list">
             {(events || []).slice(0,5).map((event) => <Link href={`/${guild.slug}/events/${event.id}`} className="ops-row" key={event.id}><strong>{event.name}</strong><p>{event.event_type.replaceAll('_',' ')} · {new Date(event.starts_at).toLocaleString('en-US', { timeZone: guild.timezone })}</p><span>{event.status.toUpperCase()} →</span></Link>)}
             {!events?.length ? <div className="panel-pad muted">No upcoming events.</div> : null}
           </div>
-        </section>
+        </section> : null}
 
-        <section className="panel panel-pad">
+        {overviewModules.has('feather') ? <section className="panel panel-pad">
           <div className="section-head"><div><h2>Permanent Feather groups</h2><p>{rules?.feather_mode === 'four_group' ? 'Guild-wide groups with fixed ROOC event rotation.' : 'Four-group rotation is not currently selected.'}</p></div></div>
           <div className="feather-group-overview">
             {featherCounts.map(({ group, count }) => <div className={activeFeatherGroup === group ? 'feather-group-row active' : 'feather-group-row'} key={group}><span>Group {group}</span><strong>{count}</strong>{activeFeatherGroup === group ? <small>ACTIVE</small> : <small>members</small>}</div>)}
           </div>
           {guild.game_preset_id === 'rooc' && rules?.feather_mode === 'four_group' ? <p className="muted rotation-note">Guild League: 4 → 3 → 2 → 1 · Emperium Overrun: 1 → 2 → 3 → 4</p> : null}
-        </section>
-      </div>
+        </section> : null}
+      </div> : null}
 
-      {rules?.puppet_mode === 'round_robin' ? <section className="panel panel-pad">
+      {overviewModules.has('puppet') && rules?.puppet_mode === 'round_robin' ? <section className="panel panel-pad">
         <div className="section-head"><div><h2>Next Puppet bidders</h2><p>Tentative current-event view using make-ups → approved appeals → current cycle → rollover. LOA/no-show, Cannot Bid and 96H are skipped without moving persistent queue position.</p></div><span className="pill">CYCLE {Number(puppetState.current_cycle || 1)} · NEXT {puppetTake}</span></div>
         <div className="puppet-next-list">{puppetNext.map((row, index) => <span className="puppet-next-item" key={row.member.id}><small>{index + 1}</small><strong>{row.member.ign}</strong><em>{row.turn_kind === 'deferred' ? 'MAKE-UP' : row.turn_kind === 'appeal' ? 'APPEAL' : row.turn_kind === 'rollover' ? 'NEXT CYCLE' : 'CURRENT'}</em></span>)}</div>
         {!puppetNext.length ? <p className="muted">No eligible Puppet bidders are currently available.</p> : null}
       </section> : null}
 
-      <section className="panel">
+      {overviewModules.has('operations') ? <section className="panel">
         <div className="panel-pad section-head"><div><h2>Operations</h2><p>The same Havoc operating path, with guild-configurable rules around it.</p></div><span className="pill">{preset?.name || 'Guild Operations'}</span></div>
         <div className="ops-list">{operations.map(([title, text, href]) => <Link key={title} href={href} className="ops-row"><strong>{title}</strong><p>{text}</p><span>Open →</span></Link>)}</div>
-      </section>
+      </section> : null}
     </AppShell>
   )
 }

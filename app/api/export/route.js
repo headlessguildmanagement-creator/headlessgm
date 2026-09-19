@@ -13,6 +13,7 @@ export async function GET(request) {
   const selector = request.nextUrl.searchParams.get('guild') || ''
   const guild = await resolveGuild(supabase, selector, 'id,name,slug,owner_user_id,plan_code,game_preset_id,timezone,attendance_mode,loa_deadline_local_time,created_at,updated_at')
   if (!guild) return NextResponse.json({ error: 'Guild not found' }, { status: 404 })
+  if (guild.plan_code === 'free') return NextResponse.json({ error: 'Guild backup export requires the GUILD plan' }, { status: 403 })
   const access = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!access) return NextResponse.json({ error: 'Officer access required' }, { status: 403 })
 

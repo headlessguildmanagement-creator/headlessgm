@@ -10,14 +10,16 @@ function safeMessage(value) {
 }
 
 async function requireOwnerGuild(supabase, guildId, userId) {
-  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id').eq('id', guildId).eq('owner_user_id', userId).single()
+  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id, plan_code').eq('id', guildId).eq('owner_user_id', userId).single()
   if (!guild) throw new Error('Guild owner access required')
+  if (guild.plan_code === 'free') throw new Error('Discord operations require the GUILD plan')
   return guild
 }
 
 async function requireManagerGuild(supabase, guildId, userId) {
-  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id').eq('id', guildId).single()
+  const { data: guild } = await supabase.from('guilds').select('id, name, owner_user_id, plan_code').eq('id', guildId).single()
   if (!guild) throw new Error('Guild not found')
+  if (guild.plan_code === 'free') throw new Error('Discord operations require the GUILD plan')
   if (guild.owner_user_id === userId) return guild
   const { data: membership } = await supabase.from('guild_users').select('role').eq('guild_id', guildId).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
   if (!membership) throw new Error('Officer access required')

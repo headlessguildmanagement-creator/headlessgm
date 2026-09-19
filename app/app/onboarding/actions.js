@@ -20,7 +20,7 @@ export async function createGuild(formData) {
   const attendanceMode = String(formData.get('attendance_mode') || 'assume_attending')
   const loaDeadline = String(formData.get('loa_deadline_local_time') || '19:30')
   const featherMode = String(formData.get('feather_mode') || 'ffa')
-  const puppetMode = String(formData.get('puppet_mode') || 'round_robin')
+  const puppetMode = String(formData.get('puppet_mode') || 'ffa')
 
   if (name.length < 2 || name.length > 80) {
     redirect('/app/onboarding?error=Guild%20name%20must%20be%20between%202%20and%2080%20characters.')
@@ -56,8 +56,8 @@ export async function createGuild(formData) {
 
   await supabase.rpc('update_guild_auction_rules', {
     p_guild_id: guildId,
-    p_feather_mode: ['ffa', 'four_group', 'random'].includes(featherMode) ? featherMode : 'ffa',
-    p_puppet_mode: ['ffa', 'round_robin', 'random'].includes(puppetMode) ? puppetMode : 'round_robin',
+    p_feather_mode: ['ffa', 'random'].includes(featherMode) ? featherMode : 'ffa',
+    p_puppet_mode: ['ffa', 'random'].includes(puppetMode) ? puppetMode : 'ffa',
     p_light_dark_feather_cap: intOrNull(formData.get('light_dark_feather_cap')),
     p_time_space_feather_cap: intOrNull(formData.get('time_space_feather_cap')),
     p_puppet_fragment_cap: intOrNull(formData.get('puppet_fragment_cap')),

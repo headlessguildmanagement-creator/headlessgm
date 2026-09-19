@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
 import { submitApplication, linkApplicationDiscord, postApplicantMessage } from './actions'
+import { commanderBrandStyle } from '../../../lib/brand.js'
 
 function panel(children) {
   return <section style={{ border: '1px solid var(--line)', borderRadius: 14, padding: 20, background: 'var(--panel)' }}>{children}</section>
@@ -30,14 +31,18 @@ export default async function ApplyPage({ params, searchParams }) {
     if (!error && data) { portal = data; portalMode = 'discord' }
   }
 
+  const brandStyle = commanderBrandStyle(recruitment.guild.plan_code, recruitment.guild.settings || {})
+  const commander = ['commander','beta'].includes(String(recruitment.guild.plan_code))
+
   const app = portal?.application
   const closed = ['rejected', 'joined'].includes(app?.status)
 
   return (
-    <main style={{ minHeight: '100vh', padding: '40px 20px 72px' }}>
+    <main className={commander ? "applicant-site commander-branded" : "applicant-site"} style={brandStyle}>
       <div style={{ width: 'min(860px, 100%)', margin: '0 auto', display: 'grid', gap: 20 }}>
         <header>
-          <p className="eyebrow">{recruitment.guild.name} · Recruitment</p>
+          <a href={`/${slug}`} className="muted" style={{fontSize:12,textDecoration:'none'}}>← {recruitment.guild.name} recruitment</a>
+          <p className="eyebrow" style={{marginTop:16}}>{recruitment.guild.name} · Recruitment</p>
           <h1 style={{ fontSize: 42, lineHeight: 1.05, letterSpacing: '-0.03em', margin: '8px 0 12px' }}>{recruitment.recruitment.title || `Apply to ${recruitment.guild.name}`}</h1>
           <p className="lede" style={{ margin: 0 }}>{recruitment.recruitment.intro || 'Submit your application. Your recruitment thread stays attached to this application from review through onboarding.'}</p>
         </header>

@@ -8,6 +8,13 @@ function safe(value) {
   return encodeURIComponent(String(value || '').slice(0, 240))
 }
 
+async function requirePaidApplication(supabase, applicationId) {
+  const { data: application } = await supabase.from('guild_applications').select('guild_id').eq('id', applicationId).maybeSingle()
+  if (!application) throw new Error('Application not found')
+  const { data: guild } = await supabase.from('guilds').select('plan_code').eq('id', application.guild_id).maybeSingle()
+  if (!guild || guild.plan_code === 'free') throw new Error('Recruitment requires the GUILD plan')
+}
+
 async function requireUser() {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.getClaims()
@@ -24,6 +31,7 @@ export async function sendOfficerApplicationMessage(formData) {
 
   try {
     if (!message) throw new Error('Enter a message')
+    await requirePaidApplication(supabase, applicationId)
     const { data: profile } = await supabase.from('profiles').select('display_name').eq('user_id', userId).maybeSingle()
     const { error } = await supabase.from('application_messages').insert({
       application_id: applicationId,
@@ -50,6 +58,7 @@ export async function setApplicationStatus(formData) {
   let destination = `/app/recruitment?application=${encodeURIComponent(applicationId)}`
 
   try {
+    await requirePaidApplication(supabase, applicationId)
     const { error } = await supabase.rpc('set_application_status', {
       p_application_id: applicationId,
       p_status: status,
@@ -74,6 +83,7 @@ export async function confirmApplicantJoined(formData) {
   let destination = `/app/recruitment?application=${encodeURIComponent(applicationId)}`
 
   try {
+    await requirePaidApplication(supabase, applicationId)
     const { error } = await supabase.rpc('confirm_application_joined', {
       p_application_id: applicationId,
       p_ign: ign,

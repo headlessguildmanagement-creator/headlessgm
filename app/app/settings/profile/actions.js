@@ -18,7 +18,7 @@ export async function saveGuildProfile(formData) {
   const attendanceMode = String(formData.get('attendance_mode') || 'assume_attending')
   const loaDeadline = String(formData.get('loa_deadline_local_time') || '19:30')
 
-  const { data: guild } = await supabase.from('guilds').select('id,owner_user_id,logo_url').eq('id', guildId).maybeSingle()
+  const { data: guild } = await supabase.from('guilds').select('id,owner_user_id,logo_url,plan_code').eq('id', guildId).maybeSingle()
   if (!guild || guild.owner_user_id !== userId) redirect('/app/settings?error=Guild%20owner%20access%20required.')
   if (name.length < 2 || name.length > 80) redirect('/app/settings/profile?error=Guild%20name%20must%20be%20between%202%20and%2080%20characters.')
 
@@ -35,11 +35,13 @@ export async function saveGuildProfile(formData) {
     logoUrl = supabase.storage.from('guild-assets').getPublicUrl(path).data.publicUrl
   }
 
+  const effectiveAttendanceMode = attendanceMode === 'custom' && !['commander','beta'].includes(guild.plan_code) ? 'assume_attending' : attendanceMode
+
   const { error } = await supabase.from('guilds').update({
     name,
     timezone,
     logo_url: logoUrl,
-    attendance_mode: ['assume_attending','rsvp_required','custom'].includes(attendanceMode) ? attendanceMode : 'assume_attending',
+    attendance_mode: ['assume_attending','rsvp_required','custom'].includes(effectiveAttendanceMode) ? effectiveAttendanceMode : 'assume_attending',
     loa_deadline_local_time: /^([01]\d|2[0-3]):[0-5]\d$/.test(loaDeadline) ? `${loaDeadline}:00` : '19:30:00',
     updated_at: new Date().toISOString(),
   }).eq('id', guild.id)

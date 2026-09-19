@@ -38,7 +38,7 @@ async function requireUser() {
 }
 
 async function requireManagerGuild(supabase, guildId, userId) {
-  const { data: guild } = await supabase.from('guilds').select('id, owner_user_id, timezone, loa_deadline_local_time').eq('id', guildId).single()
+  const { data: guild } = await supabase.from('guilds').select('id, owner_user_id, timezone, loa_deadline_local_time, plan_code').eq('id', guildId).single()
   if (!guild) throw new Error('Guild not found')
   if (guild.owner_user_id === userId) return guild
   const { data: membership } = await supabase.from('guild_users').select('role').eq('guild_id', guildId).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
@@ -277,6 +277,7 @@ export async function publishLineup(formData) {
   try {
     const guild = await requireManagerGuild(supabase, guildId, userId)
     const event = await requireEventInGuild(supabase, eventId, guildId)
+    if (guild.plan_code === 'free') throw new Error('Discord lineup publishing requires the GUILD plan')
     const [{ data: slots }, { data: members }, { data: connection }] = await Promise.all([
       supabase.from('event_lineup_slots').select('raid_code,party_no,slot_no,guild_member_id').eq('event_id', eventId).order('raid_code').order('party_no').order('slot_no'),
       supabase.from('guild_members').select('id,ign').eq('guild_id', guildId),

@@ -8,7 +8,7 @@ const plans = [
     suffix: '/month',
     annual: '$0/year',
     description: 'For trying HeadlessGM with a real guild workspace.',
-    features: ['Guild workspace', 'Roster & member identity', 'Events, LOA & attendance', 'Lineup operations', 'Standard auction presets'],
+    features: ['Guild workspace', 'Roster & member identity', 'Events, LOA & attendance', 'Main/Sub lineup builder', 'FFA + Random auctions'],
     cta: 'Start Free',
   },
   {
@@ -17,7 +17,7 @@ const plans = [
     suffix: '/month',
     annual: '$143.91/year · 25% annual discount',
     description: 'For active guilds that want the full operating workflow.',
-    features: ['Everything in Free', 'Recruitment workflow', 'Discord operations', 'Persistent Puppet & Feather state', 'History, audits & guild backup'],
+    features: ['Everything in Free', 'Public recruitment site + applications', 'Discord operations', 'Persistent Puppet & Feather presets', 'Reward caps, history & guild backup'],
     cta: 'Choose Guild',
     featured: true,
   },
@@ -27,7 +27,7 @@ const plans = [
     suffix: '/month',
     annual: '$224.91/year · 25% annual discount',
     description: 'For guilds that need fully configurable operating rules.',
-    features: ['Everything in Guild', 'Custom auction rules', 'Custom allocation methods', 'Advanced rule configuration', 'Granular operations control'],
+    features: ['Everything in Guild', 'Logo-derived app + recruitment branding', 'Typography + Brand Studio', 'Customizable officer overview', 'Custom auction rules & advanced controls'],
     cta: 'Choose Commander',
   },
 ]

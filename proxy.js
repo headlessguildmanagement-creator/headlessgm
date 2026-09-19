@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { updateSession } from './lib/supabase/proxy'
 
 const RESERVED = new Set(['api','app','auth','login','_next','favicon.ico'])
-const WORKSPACE_ROOTS = new Set(['members','events','auctions','recruitment','history','settings'])
+const WORKSPACE_ROOTS = new Set(['overview','members','events','auctions','recruitment','history','settings'])
 
 export async function proxy(request) {
   const sessionResponse = await updateSession(request)
@@ -12,11 +12,12 @@ export async function proxy(request) {
 
   const slug = parts[0]
   if (RESERVED.has(slug)) return sessionResponse
+  if (parts.length === 1) return sessionResponse
   if (parts[1] === 'apply') return sessionResponse
-  if (parts.length > 1 && !WORKSPACE_ROOTS.has(parts[1])) return sessionResponse
+  if (!WORKSPACE_ROOTS.has(parts[1])) return sessionResponse
 
   const target = request.nextUrl.clone()
-  target.pathname = parts.length === 1 ? '/app' : `/app/${parts.slice(1).join('/')}`
+  target.pathname = parts[1] === 'overview' ? '/app' : `/app/${parts.slice(1).join('/')}`
   target.searchParams.set('guild', slug)
 
   const requestHeaders = new Headers(request.headers)

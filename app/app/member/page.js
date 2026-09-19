@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
 import ThemeToggle from '../../../components/theme-toggle'
 import { fileMemberLoa, cancelMemberLoa, submitPuppetAppeal } from './actions'
+import { commanderBrandStyle } from '../../../lib/brand.js'
 
 export default async function MemberPortalPage({ searchParams }) {
   const query = await searchParams
@@ -17,9 +18,12 @@ export default async function MemberPortalPage({ searchParams }) {
   const { data: portal, error } = await supabase.rpc('get_my_guild_portal', { p_guild_id: guildId })
   if (error) return <main className="member-portal"><div className="member-portal-wrap"><h1>Member portal</h1><p>{error.message}</p></div></main>
 
+  const { data: guildTheme } = await supabase.from('guilds').select('plan_code,settings').eq('id', guildId).maybeSingle()
+  const brandStyle = commanderBrandStyle(guildTheme?.plan_code, guildTheme?.settings || {})
+  const branded = ['commander','beta'].includes(String(guildTheme?.plan_code || ''))
   const puppet = portal.puppet || {}
   return (
-    <main className="member-portal">
+    <main className={branded ? 'member-portal commander-branded' : 'member-portal'} style={brandStyle}>
       <div className="member-portal-wrap">
         <header className="member-portal-header"><div><p className="eyebrow">{portal.guild.name} · MEMBER PORTAL</p><h1>{portal.member.ign}</h1><p className="muted">Your Discord identity is linked. Availability, lineup, rewards and Puppet state are scoped to you.</p></div><ThemeToggle /></header>
         {success ? <div className="notice success">{success}</div> : null}
@@ -51,7 +55,7 @@ export default async function MemberPortalPage({ searchParams }) {
           </section>
         })}
         {!portal.events?.length ? <section className="panel panel-pad muted">No guild events are available yet.</section> : null}
-        <footer className="member-portal-footer"><Link href={`/${portal.guild.slug}`}>Return to guild workspace</Link></footer>
+        <footer className="member-portal-footer"><Link href={`/${portal.guild.slug}/overview`}>Return to guild workspace</Link></footer>
       </div>
     </main>
   )

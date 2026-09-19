@@ -13,7 +13,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const guild = await resolveGuild(supabase, params?.guild, 'id, name, slug, owner_user_id')
+  const guild = await resolveGuild(supabase, params?.guild, 'id, name, slug, owner_user_id, plan_code')
   if (!guild) redirect('/app/onboarding')
 
   const isOwner = guild.owner_user_id === userId
@@ -21,6 +21,18 @@ export default async function DiscordSettingsPage({ searchParams }) {
     ? { data: { role: 'owner' } }
     : await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner', 'officer']).maybeSingle()
   if (!membership) redirect('/app')
+
+  if (guild.plan_code === 'free') {
+    return (
+      <AppShell guildName={guild.name} guildSlug={guild.slug} title="Discord" activeHref="/app/settings/discord">
+        <section className="panel panel-pad">
+          <p className="eyebrow">GUILD</p>
+          <h2 style={{ marginTop: 6 }}>Discord operations unlock on GUILD</h2>
+          <p className="muted">FREE stays easy to set up without a bot installation. GUILD and COMMANDER can connect Discord, provision channels, publish the control panel and reconnect without resetting guild data.</p>
+        </section>
+      </AppShell>
+    )
+  }
 
   const { data: connection } = await supabase.from('discord_connections').select('discord_guild_id, discord_guild_name, metadata, bot_installed').eq('guild_id', guild.id).maybeSingle()
 

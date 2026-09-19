@@ -15,10 +15,22 @@ export default async function RecruitmentPage({ searchParams }) {
   const userId = authData?.claims?.sub
   if (authError || !userId) redirect('/login')
 
-  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,game_preset_id,owner_user_id')
+  const guild = await resolveGuild(supabase, query?.guild, 'id,name,slug,game_preset_id,owner_user_id,plan_code')
   if (!guild) redirect('/app/onboarding')
   const manager = guild.owner_user_id === userId || Boolean((await supabase.from('guild_users').select('role').eq('guild_id', guild.id).eq('user_id', userId).in('role', ['owner','officer']).maybeSingle()).data)
   if (!manager) redirect('/app')
+
+  if (guild.plan_code === 'free') {
+    return (
+      <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="RECRUITMENT" title="Recruitment" activeHref="/app/recruitment">
+        <section className="panel panel-pad">
+          <p className="eyebrow">GUILD</p>
+          <h2 style={{ marginTop: 6 }}>Public guild recruitment starts on GUILD</h2>
+          <p className="muted">GUILD and COMMANDER receive a public guild landing page, application portal, officer review workflow and applicant conversation history.</p>
+        </section>
+      </AppShell>
+    )
+  }
 
   const [{ data: applications }, { data: jobs }, { data: settings }] = await Promise.all([
     supabase.from('guild_applications').select('*').eq('guild_id', guild.id).order('submitted_at', { ascending: false }),
@@ -31,7 +43,7 @@ export default async function RecruitmentPage({ searchParams }) {
   if (selected) messages = (await supabase.from('application_messages').select('*').eq('application_id', selected.id).order('created_at')).data || []
 
   return (
-    <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="RECRUITMENT" title="Applicants" activeHref="/app/recruitment" actions={<Link href={`/${guild.slug}/apply`} className="button ghost">Public apply page</Link>}>
+    <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="RECRUITMENT" title="Applicants" activeHref="/app/recruitment" actions={<><Link href={`/${guild.slug}`} className="button ghost">Public guild page</Link><Link href={`/${guild.slug}/apply`} className="button ghost">Apply page</Link></>}>
       {success ? <div className="notice success">{success}</div> : null}
       {errorMessage ? <div className="notice error">{errorMessage}</div> : null}
 
