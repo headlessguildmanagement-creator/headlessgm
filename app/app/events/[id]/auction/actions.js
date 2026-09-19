@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../../lib/supabase/server'
 import { sendChannelMessage } from '../../../../../lib/discord/server'
-import { allocateCapped, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
+import { allocateCapped, allocateFairCombinedFeathers, eligiblePool, shuffleWith } from '../../../../../lib/auction-engine.mjs'
 import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
@@ -81,17 +81,37 @@ export async function generateAuctionDraft(formData) {
       random_orders: {},
     }
 
-    for (const category of ['light_dark_feather','time_space_feather']) {
-      const total = quantities[category]
-      if (rules.feather_mode === 'ffa') {
-        output.ffa[category] = { quantity: total, eligible_member_ids: caps[category] === 0 ? [] : eligible.map((m) => m.id), cap: caps[category] }
-        continue
-      }
-      const pool = rules.feather_mode === 'four_group' ? eligible.filter((member) => member.feather_group === activeGroup) : shuffleWith(eligible)
-      if (rules.feather_mode === 'random') output.random_orders[category] = pool.map((member) => member.id)
-      const result = allocateCapped(category, total, pool, caps[category], rules.feather_mode === 'random' ? 'rotation' : 'base')
+    if (rules.feather_mode === 'four_group') {
+      const pool = eligible.filter((member) => member.feather_group === activeGroup)
+      const result = allocateFairCombinedFeathers(
+        quantities.light_dark_feather,
+        quantities.time_space_feather,
+        pool,
+        caps.light_dark_feather,
+        caps.time_space_feather
+      )
       allocations.push(...result.rows)
-      unassigned[category] = result.unassigned
+      unassigned.light_dark_feather = result.unassigned.light_dark_feather
+      unassigned.time_space_feather = result.unassigned.time_space_feather
+      output.feather_distribution = {
+        bidder_count: pool.length,
+        equal_combined_total: result.equalCombined,
+        regular_range: result.regularRange,
+        fairness: 'combined_equal_rounds',
+      }
+    } else {
+      for (const category of ['light_dark_feather','time_space_feather']) {
+        const total = quantities[category]
+        if (rules.feather_mode === 'ffa') {
+          output.ffa[category] = { quantity: total, eligible_member_ids: caps[category] === 0 ? [] : eligible.map((m) => m.id), cap: caps[category] }
+          continue
+        }
+        const pool = shuffleWith(eligible)
+        output.random_orders[category] = pool.map((member) => member.id)
+        const result = allocateCapped(category, total, pool, caps[category], 'rotation')
+        allocations.push(...result.rows)
+        unassigned[category] = result.unassigned
+      }
     }
 
     if (rules.puppet_mode === 'ffa') {

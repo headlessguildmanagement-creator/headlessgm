@@ -48,6 +48,7 @@ export default async function AuctionPage({ params, searchParams }) {
     ? havocFeatherGroupForInstant(event.event_type, event.starts_at, guild.timezone || 'Asia/Manila')
     : null
   const randomOrders = run?.generated_output?.random_orders || {}
+  const featherDistribution = run?.generated_output?.feather_distribution || null
 
   return (
     <AppShell guildName={guild.name} eyebrow="AUCTION COMMAND" title={`${event.name} · Auction`} activeHref="/app/events" actions={<Link href={`/${guild.slug}/events/${id}`} className="button ghost">Back to event</Link>}>
@@ -87,6 +88,16 @@ export default async function AuctionPage({ params, searchParams }) {
 
       {run ? (
         <>
+          {featherDistribution ? <section className="panel panel-pad">
+            <div className="section-head"><div><h2>Feather fairness calculation</h2><p>Light/Dark and Time/Space are pooled for equal combined bidder rounds. Category caps remain absolute; anything that cannot be fairly assigned remains excess for officer review.</p></div><span className="pill">{featherDistribution.bidder_count} BIDDERS</span></div>
+            <div className="event-readiness-strip">
+              <div><small>Equal combined total</small><strong>{featherDistribution.equal_combined_total ?? 'Varies'}</strong></div>
+              <div><small>Regular bidder range</small><strong>{Array.isArray(featherDistribution.regular_range) ? featherDistribution.regular_range.join('–') : '—'}</strong></div>
+              <div><small>Method</small><strong style={{ fontSize: 14 }}>L/D → T/S</strong></div>
+              <div><small>Caps</small><strong style={{ fontSize: 14 }}>Enforced</strong></div>
+            </div>
+          </section> : null}
+
           <section className="panel">
             <div className="panel-pad section-head"><div><h2>Generated assignments</h2><p>Round Robin and Random assignments are fixed in the draft. FFA categories remain open to the eligible pool, subject to the snapshotted cap.</p></div><span className="pill">{(allocations || []).length} ROWS</span></div>
             <div className="table-wrap" style={{ border: 0, borderRadius: 0 }}><table><thead><tr><th>Reward</th><th>Member</th><th>Qty</th><th>Source</th></tr></thead><tbody>

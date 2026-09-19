@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { allocateCapped, eligiblePool, shuffleWith } from '../lib/auction-engine.mjs'
+import { allocateCapped, allocateFairCombinedFeathers, eligiblePool, shuffleWith } from '../lib/auction-engine.mjs'
 
 test('per-person cap is never exceeded and excess stays unassigned', () => {
   const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
@@ -34,4 +34,35 @@ test('random shuffle is injectable for deterministic regression coverage', () =>
   let index = 0
   const shuffled = shuffleWith([{ id: 'a' }, { id: 'b' }, { id: 'c' }], () => values[index++] ?? 0)
   assert.deepEqual(shuffled.map((member) => member.id), ['b', 'c', 'a'])
+})
+
+
+test('four-group Feather fairness pools L/D and T/S remainders into a complete combined round', () => {
+  const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+  const result = allocateFairCombinedFeathers(2, 1, members)
+  const totals = members.map((member) => {
+    const q = result.quotas[member.id]
+    return q.light_dark_feather + q.time_space_feather
+  })
+  assert.deepEqual(totals, [1, 1, 1])
+  assert.equal(result.equalCombined, 1)
+  assert.deepEqual(result.unassigned, { light_dark_feather: 0, time_space_feather: 0 })
+})
+
+test('four-group Feather category caps remain absolute and excess stays unassigned', () => {
+  const members = [{ id: 'a' }, { id: 'b' }]
+  const result = allocateFairCombinedFeathers(6, 4, members, 2, 1)
+  assert.deepEqual(result.quotas.a, { light_dark_feather: 2, time_space_feather: 1 })
+  assert.deepEqual(result.quotas.b, { light_dark_feather: 2, time_space_feather: 1 })
+  assert.deepEqual(result.unassigned, { light_dark_feather: 2, time_space_feather: 2 })
+})
+
+test('zero Feather cap blocks that category without blocking allowed category allocation', () => {
+  const members = [{ id: 'a' }, { id: 'b' }]
+  const result = allocateFairCombinedFeathers(2, 2, members, 0, 2)
+  assert.equal(result.quotas.a.light_dark_feather, 0)
+  assert.equal(result.quotas.b.light_dark_feather, 0)
+  assert.equal(result.quotas.a.time_space_feather, 1)
+  assert.equal(result.quotas.b.time_space_feather, 1)
+  assert.deepEqual(result.unassigned, { light_dark_feather: 2, time_space_feather: 0 })
 })
