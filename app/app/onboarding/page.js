@@ -32,7 +32,7 @@ export default async function OnboardingPage({ searchParams }) {
           <section className="panel panel-pad">
             <div className="section-head"><div><h2>1. Guild profile</h2><p>Name, logo and timezone define the workspace. Logo upload is optional.</p></div><span className="pill">ROOC PRESET</span></div>
             <div className="form-grid">
-              <label className="field"><span>Guild name</span><input type="text" name="name" required minLength={2} maxLength={80} placeholder="e.g. Havoc" autoComplete="organization" /></label>
+              <label className="field"><span>Guild name</span><input type="text" name="name" required minLength={2} maxLength={80} placeholder="e.g. Nightfall" autoComplete="organization" /></label>
               <label className="field"><span>Timezone</span><select name="timezone" defaultValue="Asia/Manila"><option value="Asia/Manila">Asia/Manila</option><option value="Asia/Singapore">Asia/Singapore</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="America/New_York">America/New_York</option><option value="America/Los_Angeles">America/Los_Angeles</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select></label>
               <label className="field full"><span>Guild logo · PNG/JPG/WebP/GIF · max 2 MB</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/gif" /></label>
             </div>

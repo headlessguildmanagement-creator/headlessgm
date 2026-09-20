@@ -155,3 +155,49 @@ html[data-theme="light"] .button.danger{background:#f9d9de;color:#8e2133}
 .demo-review-disabled{display:flex;gap:7px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line);background:var(--panel2)}.demo-review-disabled button{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:8px;padding:8px 10px;font-size:8px;cursor:not-allowed;opacity:.6}.demo-review-sheet footer{padding:9px 14px;border-top:1px solid var(--line);font-size:8px;color:var(--red);font-weight:800;letter-spacing:.06em;text-align:center}
 @media(max-width:900px){.demo-auction-config{grid-template-columns:repeat(2,1fr)}.demo-rule-strip{grid-template-columns:repeat(2,1fr)}.demo-eligibility-table>div{grid-template-columns:1fr 1fr}.demo-use-warning{align-items:flex-start;flex-direction:column}.demo-use-warning span{text-align:left}}
 @media(max-width:620px){.demo-auction-config,.demo-rule-strip,.demo-organized-grid,.demo-review-grid{grid-template-columns:1fr}.demo-review-grid>div+div{border-left:0;border-top:1px solid var(--line)}.demo-review-grid p{grid-template-columns:22px 1fr}.demo-review-grid em{grid-column:2}.demo-watermark-layer{inset:130px 0 0}}
+
+
+/* Mobile acceptance pass */
+.table-wrap{-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;scrollbar-gutter:stable}
+.lineup-slot-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+.demo-operations-studio{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:0 14px 14px}
+.demo-operations-studio label{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel2);padding:11px;border-radius:9px}
+.demo-operations-studio label>span{display:grid;gap:2px;flex:1}.demo-operations-studio label strong{font-size:9px}.demo-operations-studio label small{font-size:8px;color:var(--muted)}.demo-operations-studio input{width:auto}.demo-operations-studio select{width:auto;min-width:110px;font-size:9px}
+.demo-watermark-layer.light{opacity:.035}.demo-watermark-layer.strong{opacity:.075}
+.free-demo-warning{border-color:var(--line);background:var(--panel2)}.free-demo-warning strong{color:var(--muted)}
+@media(max-width:760px){
+  .hgm-topbar{flex-direction:column;justify-content:center}
+  .hgm-top-actions{width:100%}.hgm-top-actions>.button,.hgm-top-actions>a.button{flex:1;text-align:center}
+  .section-head{flex-direction:column;align-items:stretch}
+  .section-head>.pill{align-self:flex-start}
+  .operator-actions{display:grid;grid-template-columns:1fr}
+  .operator-actions form,.operator-actions .button{width:100%}
+  .queue-actions{flex-wrap:wrap}
+  .queue-actions form{flex:1}.queue-actions .button{width:100%}
+  table{min-width:640px}
+  .recruitment-site-nav{padding:14px 0;align-items:flex-start;flex-wrap:wrap}
+  .recruitment-site-nav>.button{width:100%;text-align:center}
+  .applicant-site{padding:24px 14px 54px}
+  .marketing-product-shot{overflow-x:auto}
+  .product-shot-grid{min-width:620px}
+  .demo-main-head{align-items:flex-start;flex-direction:column}
+  .demo-use-warning{margin-top:2px}
+  .demo-operations-studio{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .hgm-main{padding:0 12px 32px}
+  .hgm-sidebar{padding:16px 12px 10px}
+  .hgm-brand{padding-bottom:14px}
+  .hgm-nav a{padding:10px 11px}
+  .panel-pad{padding:14px}
+  .stat{padding:14px}
+  .lineup-slot-form{grid-template-columns:1fr}
+  .lineup-slot-form .button{width:100%}
+  .marketing-hero-copy h1,.recruitment-hero h1{font-size:44px}
+  .marketing-nav-actions{width:100%}
+  .marketing-nav-actions .button{padding:9px 10px}
+  .demo-tier-switch button{min-width:108px}
+  .demo-review-disabled{display:grid}
+  .demo-review-disabled button{width:100%}
+  .member-portal{padding:24px 12px 48px}
+}

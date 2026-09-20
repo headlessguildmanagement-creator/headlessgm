@@ -49,6 +49,7 @@ function defaultState(tier) {
     applicants: tier === 'free' ? [] : [{ id:'a1', ign:'Nyx', job:'Lord Knight', status:'new' }],
     brand: { primary:'#635bff', secondary:'#22d3ee', font:'modern' },
     modules: ['stats','event','attendance','lineup','auction','operations'],
+    operations: { excludeSupportFromPuppet:false, missedTurnPriority:false, lateLoaOfficerApproval:false, customReset:'event' },
     savedAt: null,
   }
 }
@@ -109,7 +110,13 @@ export default function DemoWorkspace({ compact = false }) {
   const eligible = useMemo(() => active.filter((m) => !m.cannotBid && !m.noGold && !m.h96), [active])
   const lineupMembers = useMemo(() => state.lineup.map((id) => state.members.find((m) => m.id === id)).filter(Boolean), [state.lineup, state.members])
   const featherEligible = useMemo(() => eligible.filter((m) => m.group === Number(state.activeFeatherGroup)), [eligible, state.activeFeatherGroup])
-  const puppetQueue = useMemo(() => [...eligible].sort((a,b) => a.puppetOrder - b.puppetOrder), [eligible])
+  const puppetQueue = useMemo(() => {
+    let rows = [...eligible]
+    if (commander && state.operations?.excludeSupportFromPuppet) rows = rows.filter((m) => String(m.role).toLowerCase() !== 'support')
+    rows.sort((a,b) => a.puppetOrder - b.puppetOrder)
+    if (commander && state.operations?.missedTurnPriority && rows.length > 2) rows = [rows[2], ...rows.filter((_,i)=>i!==2)]
+    return rows
+  }, [eligible, commander, state.operations])
   const puppetWinners = useMemo(() => {
     if (!puppetQueue.length) return []
     return Array.from({ length: Math.min(Number(state.puppetQty) || 0, puppetQueue.length) }, (_, i) => puppetQueue[(state.puppetCursor + i) % puppetQueue.length])
@@ -182,7 +189,7 @@ export default function DemoWorkspace({ compact = false }) {
 
   return (
     <div className={'demo-workspace' + (compact ? ' compact' : '') + (commander ? ' commander-demo' : '')} style={demoStyle}>
-      {paid ? <div className="demo-watermark-layer" aria-hidden="true"><span>HEADLESSGM DEMO ONLY</span><span>NOT FOR LIVE GUILD USE</span><span>HEADLESSGM DEMO ONLY</span></div> : null}
+      <div className={'demo-watermark-layer' + (paid ? ' strong' : ' light')} aria-hidden="true"><span>HEADLESSGM DEMO ONLY</span><span>{paid ? 'NOT FOR LIVE GUILD USE' : 'BROWSER DEMO'}</span><span>HEADLESSGM DEMO ONLY</span></div>
 
       <div className="demo-toolbar">
         <div>
@@ -217,7 +224,7 @@ export default function DemoWorkspace({ compact = false }) {
             <span className="pill">{state.members.length} / {DEMO_MEMBER_LIMIT} DEMO MEMBERS</span>
           </header>
 
-          {paid ? <div className="demo-use-warning"><strong>DEMO ONLY · NOT FOR LIVE GUILD USE</strong><span>No Discord publishing, copy-ready output, image export, download, webhook or backup is available here.</span></div> : null}
+          <div className={'demo-use-warning' + (paid ? '' : ' free-demo-warning')}><strong>DEMO ONLY{paid ? ' · NOT FOR LIVE GUILD USE' : ''}</strong><span>{paid ? 'No Discord publishing, copy-ready output, image export, download, webhook or backup is available here.' : 'FREE demo data also stays in this browser and is visibly marked as demo output.'}</span></div>
           {notice ? <div className="notice demo-notice">{notice}</div> : null}
 
           {tab === 'overview' ? <div className="demo-stack">
@@ -338,7 +345,18 @@ export default function DemoWorkspace({ compact = false }) {
 
           {tab === 'studio' && commander ? <div className="demo-stack">
             <div className="demo-panel">
-              <div className="demo-panel-head"><div><small>BRAND STUDIO</small><strong>Make the workspace yours</strong></div><span className="pill">COMMANDER</span></div>
+              <div className="demo-panel-head"><div><small>OPERATIONS STUDIO</small><strong>Change how your guild operates</strong></div><span className="pill">COMMANDER</span></div>
+              <p>These demo rules immediately change the organized bidding model. This is the core COMMANDER difference: GUILD uses HeadlessGM's standard methodology; COMMANDER lets the guild define its own.</p>
+              <div className="demo-operations-studio">
+                <label><input type="checkbox" checked={Boolean(state.operations?.excludeSupportFromPuppet)} onChange={(e)=>setState((s)=>({...s,operations:{...s.operations,excludeSupportFromPuppet:e.target.checked},reviewGenerated:false}))}/><span><strong>Exclude Support from Puppet</strong><small>Custom eligibility rule</small></span></label>
+                <label><input type="checkbox" checked={Boolean(state.operations?.missedTurnPriority)} onChange={(e)=>setState((s)=>({...s,operations:{...s.operations,missedTurnPriority:e.target.checked},reviewGenerated:false}))}/><span><strong>Missed turn gets priority</strong><small>Custom queue advancement</small></span></label>
+                <label><input type="checkbox" checked={Boolean(state.operations?.lateLoaOfficerApproval)} onChange={(e)=>setState((s)=>({...s,operations:{...s.operations,lateLoaOfficerApproval:e.target.checked}}))}/><span><strong>Late LOA needs officer approval</strong><small>Custom attendance policy</small></span></label>
+                <label><span><strong>Reward reset policy</strong><small>Custom cap/reset logic</small></span><select value={state.operations?.customReset || 'event'} onChange={(e)=>setState((s)=>({...s,operations:{...s.operations,customReset:e.target.value}}))}><option value="event">Every event</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+              </div>
+              <button type="button" className="button ghost" onClick={()=>setTab('auction')}>See these rules affect organized bidding →</button>
+            </div>
+            <div className="demo-panel">
+              <div className="demo-panel-head"><div><small>BRAND STUDIO</small><strong>Make the workspace yours</strong></div></div>
               <div className="demo-brand-grid">
                 <label><span>Primary</span><input type="color" value={state.brand.primary} onChange={(e) => setState((s) => ({ ...s, brand:{...s.brand,primary:e.target.value} }))} /></label>
                 <label><span>Secondary</span><input type="color" value={state.brand.secondary} onChange={(e) => setState((s) => ({ ...s, brand:{...s.brand,secondary:e.target.value} }))} /></label>
@@ -349,7 +367,7 @@ export default function DemoWorkspace({ compact = false }) {
               <div className="demo-panel-head"><div><small>OVERVIEW STUDIO</small><strong>Choose dashboard modules</strong></div></div>
               <div className="demo-module-list">{['stats','event','attendance','lineup','auction','operations'].map((id) => <label key={id}><input type="checkbox" checked={state.modules.includes(id)} onChange={() => setState((s) => ({ ...s, modules:s.modules.includes(id) ? s.modules.filter((x) => x !== id) : [...s.modules,id] }))} /><span>{id}</span></label>)}</div>
             </div>
-            <div className="notice"><strong>COMMANDER demo protection:</strong> visual customization is preview-only. There is no deploy, public page publish, theme export or production workspace connection.</div>
+            <div className="notice"><strong>COMMANDER demo protection:</strong> Operations, branding and overview changes are preview-only. There is no production deploy, public-page publish, export or live workspace connection.</div>
           </div> : null}
         </section>
       </div>

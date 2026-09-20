@@ -96,7 +96,7 @@ export default function Home() {
 
         <div className="marketing-product-shot" aria-label="HeadlessGM product preview">
           <div className="product-shot-top">
-            <div className="product-shot-brand"><span className="product-dot"/><strong>HAVOC</strong><small>HeadlessGM workspace</small></div>
+            <div className="product-shot-brand"><span className="product-dot"/><strong>HEADLESSGM</strong><small>Guild operations workspace</small></div>
             <span className="pill">EVENT COMMAND</span>
           </div>
           <div className="product-shot-grid">

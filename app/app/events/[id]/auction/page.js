@@ -80,7 +80,7 @@ export default async function AuctionPage({ params, searchParams }) {
 
       <section className="panel panel-pad">
         <div className="section-head"><div><h2>Pre-event reminder</h2><p>Publishes the current possible bidders only. This is intentionally not the official bidding list.</p></div><form action={publishTentativeBidders}><input type="hidden" name="event_id" value={id}/><button type="submit" className="button ghost">Publish Possible Bidders</button></form></div>
-        <div className="notice"><strong>Havoc rule:</strong> possible Puppet bidders are limited to {event.event_type === 'emperium_overrun' ? 20 : 8} for this event type. Final bidders still depend on current-cycle state, make-ups, appeals, 96H, LOA/no-show and Cannot Bid.</div>
+        <div className="notice"><strong>Standard preset:</strong> possible Puppet bidders are limited to {event.event_type === 'emperium_overrun' ? 20 : 8} for this event type. Final bidders still depend on current-cycle state, make-ups, appeals, 96H, LOA/no-show and Cannot Bid.</div>
       </section>
 
       {rules.puppet_mode === 'round_robin' ? <section className="panel">
@@ -121,7 +121,7 @@ export default async function AuctionPage({ params, searchParams }) {
           <label className="field"><span>Time / Space Feather quantity</span><input type="number" name="time_space_feather" min="0" step="1" defaultValue={input.time_space_feather ?? 0}/></label>
           <label className="field"><span>Puppet Fragment quantity</span><input type="number" name="puppet_fragment" min="0" step="1" defaultValue={input.puppet_fragment ?? 0}/></label>
           <label className="field"><span>Illusion Fragment quantity</span><input type="number" name="illusion_fragment" min="0" step="1" defaultValue={input.illusion_fragment ?? 0}/></label>
-          {rules.feather_mode === 'four_group' ? automaticFeatherGroup ? <><input type="hidden" name="active_feather_group" value={automaticFeatherGroup}/><div className="notice full"><strong>Feather Group {automaticFeatherGroup}</strong> is selected automatically from the proven ROOC calendar rotation for this event date.</div></> : <label className="field"><span>Active Feather group</span><select name="active_feather_group" defaultValue={String(run?.input_data?.active_feather_group || 1)}>{[1,2,3,4].map((group)=><option value={group} key={group}>Group {group}</option>)}</select></label> : null}
+          {rules.feather_mode === 'four_group' ? automaticFeatherGroup ? <><input type="hidden" name="active_feather_group" value={automaticFeatherGroup}/><div className="notice full"><strong>Feather Group {automaticFeatherGroup}</strong> is selected automatically from the configured ROOC calendar rotation for this event date.</div></> : <label className="field"><span>Active Feather group</span><select name="active_feather_group" defaultValue={String(run?.input_data?.active_feather_group || 1)}>{[1,2,3,4].map((group)=><option value={group} key={group}>Group {group}</option>)}</select></label> : null}
           <div className="full"><button type="submit" className="button">{run?'Regenerate draft':'Generate draft'}</button></div>
         </form>}
       </section>

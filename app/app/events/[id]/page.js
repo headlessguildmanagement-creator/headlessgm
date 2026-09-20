@@ -162,7 +162,7 @@ export default async function EventDetailPage({ params, searchParams }) {
                     const member = memberMap.get(slot?.guild_member_id)
                     const candidates = candidatesFor(member?.id)
                     return (
-                      <form key={slotNo} action={assignLineupMember} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6 }}>
+                      <form key={slotNo} action={assignLineupMember} className="lineup-slot-form">
                         <input type="hidden" name="event_id" value={event.id}/><input type="hidden" name="guild_id" value={event.guild_id}/><input type="hidden" name="raid_code" value={raid}/><input type="hidden" name="party_no" value={party}/><input type="hidden" name="slot_no" value={slotNo}/>
                         <select name="guild_member_id" defaultValue={member?.id || ''}><option value="">Slot {slotNo} · empty</option>{candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.ign} · {jobMap[candidate.job_code] || candidate.job_code || '—'}</option>)}</select>
                         <button type="submit" className="button ghost">Save</button>

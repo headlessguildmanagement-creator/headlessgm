@@ -158,7 +158,7 @@ export default async function AppHome({ searchParams }) {
       </section> : <div className="notice">No active/upcoming event exists yet. Create one from Events.</div>) : null}
 
       {overviewModules.has('alerts') && (rosterAlerts.length || supportAlerts.length) ? <section className="panel panel-pad">
-        <div className="section-head"><div><h2>Roster and lineup checks</h2><p>Havoc-style officer checks for missing roster information and started parties without Support.</p></div><span className="pill">{rosterAlerts.length + supportAlerts.length} ALERT{rosterAlerts.length + supportAlerts.length === 1 ? '' : 'S'}</span></div>
+        <div className="section-head"><div><h2>Roster and lineup checks</h2><p>Officer checks for missing roster information and started parties without Support.</p></div><span className="pill">{rosterAlerts.length + supportAlerts.length} ALERT{rosterAlerts.length + supportAlerts.length === 1 ? '' : 'S'}</span></div>
         <div className="officer-alert-columns">
           <div><h3>Missing member information</h3>
             {rosterAlerts.length ? rosterAlerts.slice(0, 12).map(({ member, missing }) => <div className="compact-alert" key={member.id}><strong>{member.ign}</strong><span>Missing: {missing.join(', ')}</span></div>) : <div className="compact-alert clear">Roster fields are complete.</div>}
