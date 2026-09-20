@@ -3,13 +3,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import { billingSelection, isLemonTestMode } from '../../../../lib/billing/plans.mjs'
+import { billingReturnUrl } from '../../../../lib/billing/url.mjs'
 
 function safe(value) {
   return encodeURIComponent(String(value || '').slice(0, 220))
-}
-
-function baseUrl() {
-  return String(process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://headlessgm-nu.vercel.app').replace(/\/$/, '')
 }
 
 async function ownerContext(guildId) {
@@ -49,7 +46,7 @@ export async function startCheckout(formData) {
       data: {
         type: 'checkouts',
         attributes: {
-          product_options: { redirect_url: `${baseUrl()}/${guild.slug}/settings/billing?checkout=success`, enabled_variants: [selection.variantId] },
+          product_options: { redirect_url: billingReturnUrl(guild.slug), enabled_variants: [selection.variantId] },
           checkout_options: { embed: false, media: true, logo: true, desc: true, discount: true, subscription_preview: true },
           checkout_data: {
             ...(email ? { email } : {}),

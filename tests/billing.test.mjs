@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { billingCatalog, billingPlanForVariant, billingSelection } from '../lib/billing/plans.mjs'
+import { billingReturnUrl, normalizeAppUrl } from '../lib/billing/url.mjs'
 import {
   BILLING_WEBHOOK_EVENTS,
   entitlementPlanForSubscription,
@@ -115,4 +116,21 @@ test('subscription extraction handles subscription and invoice payloads', () => 
   const payload = { data:{ type:'subscription-invoices', id:'inv_1', attributes:{ subscription_id:123 } } }
   assert.equal(subscriptionIdFromPayload(payload), '123')
   assert.equal(subscriptionIdFromPayload({ data:{ type:'subscriptions', id:'sub_9', attributes:{} } }), 'sub_9')
+})
+
+
+test('billing return URL normalizes Vercel host-only and quoted values', () => {
+  assert.equal(normalizeAppUrl('headlessgm-nu.vercel.app'), 'https://headlessgm-nu.vercel.app')
+  assert.equal(normalizeAppUrl('"https://headlessgm-nu.vercel.app/"'), 'https://headlessgm-nu.vercel.app')
+  assert.equal(
+    billingReturnUrl('guild-slug', { NEXT_PUBLIC_APP_URL:'headlessgm-nu.vercel.app' }),
+    'https://headlessgm-nu.vercel.app/guild-slug/settings/billing?checkout=success'
+  )
+})
+
+test('billing return URL safely falls back when the configured URL is malformed', () => {
+  assert.equal(
+    billingReturnUrl('guild-slug', { NEXT_PUBLIC_APP_URL:'not a valid host /' }),
+    'https://headlessgm-nu.vercel.app/guild-slug/settings/billing?checkout=success'
+  )
 })
