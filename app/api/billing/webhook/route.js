@@ -57,7 +57,7 @@ export async function POST(request) {
 
   const admin = createAdminClient()
   const payloadHash = createHash('sha256').update(raw).digest('hex')
-  const eventKey = webhookEventKey(eventName, payload)
+  const eventKey = webhookEventKey(eventName, payloadHash)
   const custom = payload?.meta?.custom_data || {}
   let subscriptionId = subscriptionIdFromPayload(payload)
   let guildId = String(custom.guild_id || '').trim()

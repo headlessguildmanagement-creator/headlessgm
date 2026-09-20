@@ -104,9 +104,15 @@ test('plan changes support GUILD/COMMANDER and monthly/annual transitions', () =
   }
 })
 
-test('generic event identity and subscription extraction are deterministic', () => {
+test('webhook idempotency keys distinguish legitimate repeated resource updates', () => {
+  assert.equal(webhookEventKey('subscription_updated', 'hash-a'), 'lemonsqueezy:subscription_updated:hash-a')
+  assert.equal(webhookEventKey('subscription_updated', 'hash-b'), 'lemonsqueezy:subscription_updated:hash-b')
+  assert.notEqual(webhookEventKey('subscription_updated', 'hash-a'), webhookEventKey('subscription_updated', 'hash-b'))
+  assert.equal(webhookEventKey('subscription_updated', 'hash-a'), webhookEventKey('subscription_updated', 'hash-a'))
+})
+
+test('subscription extraction handles subscription and invoice payloads', () => {
   const payload = { data:{ type:'subscription-invoices', id:'inv_1', attributes:{ subscription_id:123 } } }
-  assert.equal(webhookEventKey('subscription_payment_success', payload), 'lemonsqueezy:subscription_payment_success:subscription-invoices:inv_1')
   assert.equal(subscriptionIdFromPayload(payload), '123')
   assert.equal(subscriptionIdFromPayload({ data:{ type:'subscriptions', id:'sub_9', attributes:{} } }), 'sub_9')
 })
