@@ -13,6 +13,7 @@ const lifecycleEvents = new Set([
   'subscription_expired',
   'subscription_paused',
   'subscription_unpaused',
+  'subscription_plan_changed',
 ])
 
 function secureEqualHex(a, b) {
