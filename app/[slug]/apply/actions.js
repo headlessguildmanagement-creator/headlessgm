@@ -8,6 +8,12 @@ function safe(value) {
   return encodeURIComponent(String(value || '').slice(0, 240))
 }
 
+async function requireActiveRecruitment(supabase, slug) {
+  const { data, error } = await supabase.rpc('get_public_recruitment_page', { p_guild_slug: slug })
+  if (error || !data?.guild) throw new Error('This guild’s HeadlessGM recruitment site is currently inactive.')
+  return data
+}
+
 export async function submitApplication(formData) {
   const slug = String(formData.get('slug') || '').trim().toLowerCase()
   const ign = String(formData.get('ign') || '').trim()
@@ -47,6 +53,7 @@ export async function linkApplicationDiscord(formData) {
 
   let destination = `/${encodeURIComponent(slug)}/apply?token=${encodeURIComponent(token)}`
   try {
+    await requireActiveRecruitment(supabase, slug)
     const { data: authData, error: authError } = await supabase.auth.getClaims()
     if (authError || !authData?.claims?.sub) {
       destination = `/login?next=${encodeURIComponent(`/${slug}/apply?token=${token}`)}`
@@ -74,6 +81,7 @@ export async function postApplicantMessage(formData) {
 
   let destination = token ? `/${encodeURIComponent(slug)}/apply?token=${encodeURIComponent(token)}` : `/${encodeURIComponent(slug)}/apply`
   try {
+    await requireActiveRecruitment(supabase, slug)
     if (token) {
       const { error } = await supabase.rpc('post_application_message', {
         p_guild_slug: slug,

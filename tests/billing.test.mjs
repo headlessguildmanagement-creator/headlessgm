@@ -189,15 +189,25 @@ test('successful payment confirms a pending higher-tier upgrade', () => {
   assert.equal(paid.paymentStatus, 'paid')
 })
 
-test('downgrades remove higher-tier access without waiting for another payment', () => {
-  const downgraded = resolveSubscriptionState({
+test('downgrades preserve already-paid higher-tier access until renewal payment', () => {
+  const scheduled = resolveSubscriptionState({
     eventName:'subscription_updated',
     attributes:{ status:'active' },
     mapping:{ planCode:'guild', billingPeriod:'monthly' },
     prior:{ plan_code:'commander', billing_period:'monthly', payment_status:'paid' },
     currentPlan:'commander',
   })
-  assert.equal(downgraded.entitlementPlan, 'guild')
+  assert.equal(scheduled.planCode, 'guild')
+  assert.equal(scheduled.entitlementPlan, 'commander')
+
+  const renewed = resolveSubscriptionState({
+    eventName:'subscription_payment_success',
+    attributes:{ status:'active' },
+    mapping:{ planCode:'guild', billingPeriod:'monthly' },
+    prior:{ plan_code:'guild', billing_period:'monthly', payment_status:'paid' },
+    currentPlan:'commander',
+  })
+  assert.equal(renewed.entitlementPlan, 'guild')
 })
 
 test('new paid subscription waits for payment confirmation when current access is free', () => {

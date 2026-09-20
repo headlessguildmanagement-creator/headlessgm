@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import nacl from 'tweetnacl'
+import { createAdminClient } from '../../../../lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,17 @@ function ephemeral(content) {
   return NextResponse.json({ type: 4, data: { content, flags: 64 } })
 }
 
+async function requirePaidDiscordGuild(guildId) {
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin.from('guilds').select('plan_code,status').eq('id', guildId).maybeSingle()
+    if (error || !data || data.status !== 'active') return false
+    return ['guild', 'commander', 'beta'].includes(String(data.plan_code || '').toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request) {
   const rawBody = await request.text()
   if (!(await verifyDiscordSignature(rawBody, request))) {
@@ -53,6 +65,7 @@ export async function POST(request) {
     if (customId.startsWith('hgm:link:')) {
       const guildId = customId.slice('hgm:link:'.length)
       if (!/^[0-9a-f-]{36}$/i.test(guildId)) return ephemeral('This HeadlessGM link is invalid.')
+      if (!(await requirePaidDiscordGuild(guildId))) return ephemeral('This HeadlessGM Discord integration is currently inactive. The guild owner can reactivate it by restoring a GUILD or COMMANDER subscription.')
       const url = `${site}/app/link-character?guild=${encodeURIComponent(guildId)}`
       return ephemeral(`Open HeadlessGM to choose your existing character: ${url}`)
     }
@@ -61,6 +74,7 @@ export async function POST(request) {
       const match = customId.match(/^hgm:member:(loa|events|lineup|rewards):([0-9a-f-]{36})$/i)
       if (!match) return ephemeral('This HeadlessGM member action is invalid.')
       const [, view, guildId] = match
+      if (!(await requirePaidDiscordGuild(guildId))) return ephemeral('This HeadlessGM Discord integration is currently inactive. The guild owner can reactivate it by restoring a GUILD or COMMANDER subscription.')
       const url = `${site}/app/member?guild=${encodeURIComponent(guildId)}&view=${encodeURIComponent(view)}`
       const labels = {
         loa: 'File or cancel your event LOA',

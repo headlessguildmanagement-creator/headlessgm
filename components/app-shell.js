@@ -43,7 +43,7 @@ export default async function AppShell({ guildName = 'HeadlessGM', guildSlug = '
             <Link key={`${label}-${href}`} href={withGuild(href, effectiveSlug)} className={activeHref === href ? 'active' : ''}>{label}</Link>
           ))}
         </nav>
-        <div className="hgm-sidebar-foot"><span className="hgm-status-dot" /> HeadlessGM online · {String(planCode).toUpperCase()}</div>
+        <div className="hgm-sidebar-bottom"><Link href="/support" className="hgm-support-link">Contact support</Link><div className="hgm-legal-mini"><Link href="/legal/terms">Terms</Link><Link href="/legal/privacy">Privacy</Link><Link href="/cookie-settings">Cookies</Link></div><div className="hgm-sidebar-foot"><span className="hgm-status-dot" /> HeadlessGM online · {String(planCode).toUpperCase()}</div></div>
       </aside>
 
       <main className="hgm-main">

@@ -25,6 +25,12 @@ export default async function BillingPage({ searchParams }) {
   const ready = billingIntegrationReady()
   const testMode = isLemonTestMode()
   const hasSubscription = Boolean(billing?.provider_subscription_id && billing?.status !== 'expired')
+  const planRank = (code) => code === 'commander' ? 2 : code === 'guild' ? 1 : 0
+  const pendingDowngrade = Boolean(billing?.plan_code && planRank(billing.plan_code) < planRank(guild.plan_code))
+  const pendingUpgrade = Boolean(billing?.plan_code && planRank(billing.plan_code) > planRank(guild.plan_code))
+  const effectiveDate = billing?.renews_at || billing?.ends_at
+  const targetOffer = offers.find((item) => item.planCode === billing?.plan_code)
+  const targetPrice = targetOffer ? (billing?.billing_period === 'annual' ? targetOffer.annual : targetOffer.monthly) : null
 
   return (
     <AppShell guildName={guild.name} guildSlug={guild.slug} title="Billing" activeHref="/app/settings">
@@ -43,7 +49,8 @@ export default async function BillingPage({ searchParams }) {
           <div><small>Cycle</small><strong>{billing?.billing_period ? String(billing.billing_period).toUpperCase() : '—'}</strong></div>
           <div><small>Renews / ends</small><strong>{billing?.ends_at ? new Date(billing.ends_at).toLocaleDateString() : billing?.renews_at ? new Date(billing.renews_at).toLocaleDateString() : '—'}</strong></div>
         </div>
-        {billing?.plan_code && billing.plan_code !== guild.plan_code && billing?.status !== 'expired' ? <div className="notice">Billing provider plan: <strong>{String(billing.plan_code).toUpperCase()}</strong>. HeadlessGM access remains <strong>{String(guild.plan_code).toUpperCase()}</strong> until a successful payment webhook confirms the higher-tier upgrade.</div> : null}
+        {pendingUpgrade && billing?.status !== 'expired' ? <div className="notice">Upgrade pending: Lemon Squeezy shows <strong>{String(billing.plan_code).toUpperCase()}</strong>, while HeadlessGM remains <strong>{String(guild.plan_code).toUpperCase()}</strong> until a successful payment webhook confirms the charge.</div> : null}
+        {pendingDowngrade && billing?.status !== 'expired' ? <div className="notice"><strong>Downgrade scheduled.</strong> You keep {String(guild.plan_code).toUpperCase()} access{effectiveDate ? <> through <strong>{new Date(effectiveDate).toLocaleDateString()}</strong></> : null}. After that, your subscription continues on <strong>{String(billing.plan_code).toUpperCase()}</strong>{targetPrice ? <> at <strong>{targetPrice}{billing?.billing_period === 'annual' ? '/year' : '/month'}</strong></> : null}. Higher-tier features will be disabled when the downgrade takes effect, but your saved settings are retained if you upgrade again.</div> : null}
         {billing?.cancelled && billing?.ends_at ? <div className="notice">Cancelled subscriptions keep paid access through the confirmed end date. Historical guild data is preserved after downgrade.</div> : null}
         {billing?.payment_status === 'failed' ? <div className="notice error">A payment attempt failed. Lemon Squeezy may retry it; access remains until the subscription is confirmed expired.</div> : null}
         {billing?.provider_subscription_id ? <form action={openCustomerPortal} className="operator-actions"><input type="hidden" name="guild_id" value={guild.id}/><button className="button" type="submit">Manage billing / resume / cancel</button></form> : null}
@@ -58,13 +65,16 @@ export default async function BillingPage({ searchParams }) {
               const isCurrent = billing?.plan_code === offer.planCode && billing?.billing_period === period && hasSubscription
               const price = period === 'monthly' ? offer.monthly : offer.annual
               const action = hasSubscription ? changeSubscription : startCheckout
+              const isTierDowngrade = hasSubscription && planRank(offer.planCode) < planRank(guild.plan_code)
+              const isTierUpgrade = hasSubscription && planRank(offer.planCode) > planRank(guild.plan_code)
+              const buttonLabel = isCurrent ? 'Current billing plan' : isTierDowngrade ? `Downgrade to ${offer.label}` : isTierUpgrade ? `Upgrade to ${offer.label}` : hasSubscription ? 'Change billing cycle' : `Choose ${period}`
               return <form action={action} className="panel panel-pad" key={period}>
                 <input type="hidden" name="guild_id" value={guild.id}/>
                 <input type="hidden" name="plan_code" value={offer.planCode}/>
                 <input type="hidden" name="billing_period" value={period}/>
                 <strong>{price}<small>/{period === 'monthly' ? 'month' : 'year'}</small></strong>
                 {period === 'annual' ? <span className="pill">~25% LESS THAN 12 MONTHS</span> : null}
-                <button type="submit" className="button" disabled={!ready || isCurrent}>{isCurrent ? 'Current billing plan' : hasSubscription ? 'Switch to this plan' : `Choose ${period}`}</button>
+                <button type="submit" className="button" disabled={!ready || isCurrent}>{buttonLabel}</button>
               </form>
             })}
           </div>

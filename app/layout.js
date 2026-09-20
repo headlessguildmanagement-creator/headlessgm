@@ -1,4 +1,5 @@
 import "./globals.css";
+import { CookieConsentBanner } from "../components/cookie-consent";
 
 const rawSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || "headlessgm-nu.vercel.app"
 const normalizedSiteUrl = /^https?:\/\//i.test(rawSiteUrl) ? rawSiteUrl : `https://${rawSiteUrl}`
@@ -30,7 +31,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeBoot }} /></head>
-      <body>{children}</body>
+      <body>{children}<CookieConsentBanner /></body>
     </html>
   );
 }

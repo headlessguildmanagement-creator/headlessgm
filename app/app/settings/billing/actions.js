@@ -89,6 +89,10 @@ export async function changeSubscription(formData) {
   const apiKey = process.env.LEMON_SQUEEZY_API_KEY
   if (!apiKey) redirect(`/${guild.slug}/settings/billing?error=${safe('Billing management is not configured yet.')}`)
 
+  const currentRank = billing.plan_code === 'commander' ? 2 : billing.plan_code === 'guild' ? 1 : 0
+  const targetRank = planCode === 'commander' ? 2 : planCode === 'guild' ? 1 : 0
+  const tierDowngrade = targetRank < currentRank
+
   const response = await fetch(`https://api.lemonsqueezy.com/v1/subscriptions/${encodeURIComponent(billing.provider_subscription_id)}`, {
     method: 'PATCH',
     headers: { Accept: 'application/vnd.api+json', 'Content-Type': 'application/vnd.api+json', Authorization: `Bearer ${apiKey}` },
@@ -99,7 +103,7 @@ export async function changeSubscription(formData) {
         attributes: {
           product_id: selection.productId,
           variant_id: selection.variantId,
-          invoice_immediately: true,
+          ...(tierDowngrade ? { disable_prorations: true } : { invoice_immediately: true }),
         },
       },
     }),

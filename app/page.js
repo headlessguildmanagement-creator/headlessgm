@@ -251,7 +251,7 @@ export default function Home() {
       <footer className="marketing-footer">
         <div className="marketing-brand"><span className="marketing-brand-mark">H</span><span><strong>HEADLESSGM</strong><small>HEADLESS GUILD MANAGEMENT</small></span></div>
         <p>Guild operations, without the operational mess.</p>
-        <div><a href="#demo">Demo</a><a href="#product">Product</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link></div>
+        <div><a href="#demo">Demo</a><a href="#product">Product</a><a href="#pricing">Pricing</a><Link href="/support">Support</Link><Link href="/legal/terms">Terms</Link><Link href="/legal/privacy">Privacy</Link><Link href="/legal/cookies">Cookies</Link><Link href="/cookie-settings">Cookie settings</Link><Link href="/login">Sign in</Link></div>
       </footer>
     </main>
   )
