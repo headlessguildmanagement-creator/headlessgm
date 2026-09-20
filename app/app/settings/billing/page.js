@@ -30,7 +30,7 @@ export default async function BillingPage({ searchParams }) {
     <AppShell guildName={guild.name} guildSlug={guild.slug} title="Billing" activeHref="/app/settings">
       {params?.error ? <div className="notice error">{String(params.error)}</div> : null}
       {params?.checkout === 'success' ? <div className="notice success">Checkout finished. Lemon Squeezy is confirming the subscription through the signed webhook. Plan access updates from the verified webhook, not from this return page.</div> : null}
-      {params?.change === 'pending' ? <div className="notice success">Lemon Squeezy accepted the subscription change. Access will update only after the signed webhook confirms the new billing state.</div> : null}
+      {params?.change === 'pending' ? <div className="notice success">Lemon Squeezy accepted the subscription change. Paid upgrades are invoiced immediately, and higher-tier access unlocks only after the signed successful-payment webhook confirms the charge.</div> : null}
       {testMode ? <div className="notice"><strong>TEST MODE</strong> · Checkout uses Lemon Squeezy test data and cannot charge a real customer.</div> : null}
       {!ready ? <div className="notice error"><strong>Billing integration setup is incomplete.</strong> The server billing variables must be available before checkout can run.</div> : null}
 
@@ -43,6 +43,7 @@ export default async function BillingPage({ searchParams }) {
           <div><small>Cycle</small><strong>{billing?.billing_period ? String(billing.billing_period).toUpperCase() : '—'}</strong></div>
           <div><small>Renews / ends</small><strong>{billing?.ends_at ? new Date(billing.ends_at).toLocaleDateString() : billing?.renews_at ? new Date(billing.renews_at).toLocaleDateString() : '—'}</strong></div>
         </div>
+        {billing?.plan_code && billing.plan_code !== guild.plan_code && billing?.status !== 'expired' ? <div className="notice">Billing provider plan: <strong>{String(billing.plan_code).toUpperCase()}</strong>. HeadlessGM access remains <strong>{String(guild.plan_code).toUpperCase()}</strong> until a successful payment webhook confirms the higher-tier upgrade.</div> : null}
         {billing?.cancelled && billing?.ends_at ? <div className="notice">Cancelled subscriptions keep paid access through the confirmed end date. Historical guild data is preserved after downgrade.</div> : null}
         {billing?.payment_status === 'failed' ? <div className="notice error">A payment attempt failed. Lemon Squeezy may retry it; access remains until the subscription is confirmed expired.</div> : null}
         {billing?.provider_subscription_id ? <form action={openCustomerPortal} className="operator-actions"><input type="hidden" name="guild_id" value={guild.id}/><button className="button" type="submit">Manage billing / resume / cancel</button></form> : null}

@@ -80,7 +80,7 @@ export async function changeSubscription(formData) {
   const selection = billingSelection(planCode, billingPeriod)
   if (!selection?.variantId) redirect(`/${guild.slug}/settings/billing?error=${safe('That billing option is not configured.')}`)
 
-  const { data: billing } = await supabase.from('billing_subscriptions').select('provider_subscription_id,status,variant_id').eq('guild_id', guild.id).maybeSingle()
+  const { data: billing } = await supabase.from('billing_subscriptions').select('provider_subscription_id,status,variant_id,plan_code,billing_period').eq('guild_id', guild.id).maybeSingle()
   if (!billing?.provider_subscription_id || String(billing.status) === 'expired') {
     redirect(`/${guild.slug}/settings/billing?error=${safe('No active paid subscription is connected to this guild.')}`)
   }
@@ -96,7 +96,11 @@ export async function changeSubscription(formData) {
       data: {
         type: 'subscriptions',
         id: String(billing.provider_subscription_id),
-        attributes: { product_id: selection.productId, variant_id: selection.variantId },
+        attributes: {
+          product_id: selection.productId,
+          variant_id: selection.variantId,
+          invoice_immediately: true,
+        },
       },
     }),
     cache: 'no-store',
@@ -106,8 +110,9 @@ export async function changeSubscription(formData) {
     const detail = body?.errors?.[0]?.detail || 'Could not change the Lemon Squeezy subscription.'
     redirect(`/${guild.slug}/settings/billing?error=${safe(detail)}`)
   }
+  const returnedVariantId = Number(body?.data?.attributes?.variant_id)
   const portalUpdate = body?.data?.attributes?.urls?.customer_portal_update_subscription
-  if (portalUpdate) redirect(portalUpdate)
+  if (portalUpdate && returnedVariantId !== Number(selection.variantId)) redirect(portalUpdate)
   redirect(`/${guild.slug}/settings/billing?change=pending`)
 }
 

@@ -4,6 +4,7 @@ import { billingCatalog, billingPlanForVariant, billingSelection } from '../lib/
 import { billingReturnUrl, normalizeAppUrl } from '../lib/billing/url.mjs'
 import {
   BILLING_WEBHOOK_EVENTS,
+  entitlementPlanForEvent,
   entitlementPlanForSubscription,
   resolveSubscriptionState,
   subscriptionIdFromPayload,
@@ -153,4 +154,59 @@ test('webhook fingerprint still changes for legitimate subscription state change
   const active = { data:{ id:'sub-1', type:'subscriptions', attributes:{ status:'active', updated_at:'2026-09-20T06:00:00Z' } }, meta:{ event_name:'subscription_updated', webhook_id:'one' } }
   const cancelled = { data:{ id:'sub-1', type:'subscriptions', attributes:{ status:'cancelled', updated_at:'2026-09-20T07:00:00Z' } }, meta:{ event_name:'subscription_updated', webhook_id:'two' } }
   assert.notDeepEqual(webhookFingerprintPayload(active), webhookFingerprintPayload(cancelled))
+})
+
+
+test('higher-tier upgrades wait for successful payment before changing access', () => {
+  assert.equal(entitlementPlanForEvent({
+    eventName:'subscription_updated',
+    status:'active',
+    candidatePlan:'commander',
+    currentPlan:'guild',
+  }), 'guild')
+
+  const pending = resolveSubscriptionState({
+    eventName:'subscription_updated',
+    attributes:{ status:'active' },
+    mapping:{ planCode:'commander', billingPeriod:'monthly' },
+    prior:{ plan_code:'guild', billing_period:'monthly', payment_status:'paid' },
+    currentPlan:'guild',
+  })
+  assert.equal(pending.planCode, 'commander')
+  assert.equal(pending.entitlementPlan, 'guild')
+  assert.equal(pending.paymentStatus, 'pending')
+})
+
+test('successful payment confirms a pending higher-tier upgrade', () => {
+  const paid = resolveSubscriptionState({
+    eventName:'subscription_payment_success',
+    attributes:{ status:'active' },
+    mapping:{ planCode:'commander', billingPeriod:'monthly' },
+    prior:{ plan_code:'commander', billing_period:'monthly', payment_status:'pending' },
+    currentPlan:'guild',
+  })
+  assert.equal(paid.entitlementPlan, 'commander')
+  assert.equal(paid.paymentStatus, 'paid')
+})
+
+test('downgrades remove higher-tier access without waiting for another payment', () => {
+  const downgraded = resolveSubscriptionState({
+    eventName:'subscription_updated',
+    attributes:{ status:'active' },
+    mapping:{ planCode:'guild', billingPeriod:'monthly' },
+    prior:{ plan_code:'commander', billing_period:'monthly', payment_status:'paid' },
+    currentPlan:'commander',
+  })
+  assert.equal(downgraded.entitlementPlan, 'guild')
+})
+
+test('new paid subscription waits for payment confirmation when current access is free', () => {
+  const created = resolveSubscriptionState({
+    eventName:'subscription_created',
+    attributes:{ status:'active' },
+    mapping:{ planCode:'guild', billingPeriod:'monthly' },
+    currentPlan:'free',
+  })
+  assert.equal(created.entitlementPlan, 'free')
+  assert.equal(created.paymentStatus, 'pending')
 })

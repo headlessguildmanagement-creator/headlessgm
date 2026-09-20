@@ -14,6 +14,7 @@ export const runtime = 'nodejs'
 
 const supportedEvents = new Set(BILLING_WEBHOOK_EVENTS)
 const subscriptionEvents = new Set(BILLING_WEBHOOK_EVENTS.filter((name) => name.startsWith('subscription_') && !name.startsWith('subscription_payment_')))
+const paymentEvents = new Set(BILLING_WEBHOOK_EVENTS.filter((name) => name.startsWith('subscription_payment_')))
 
 function secureEqualHex(a, b) {
   try {
@@ -127,7 +128,7 @@ export async function POST(request) {
     let subscriptionData = null
     if (subscriptionEvents.has(eventName) && String(payload?.data?.type || '') === 'subscriptions') {
       subscriptionData = payload.data
-    } else if (!existingBilling && subscriptionId) {
+    } else if (subscriptionId && (paymentEvents.has(eventName) || eventName === 'order_refunded' || !existingBilling)) {
       subscriptionData = await fetchSubscription(subscriptionId)
     }
 
@@ -149,7 +150,7 @@ export async function POST(request) {
     if (!subscriptionId && subscriptionData?.id) subscriptionId = String(subscriptionData.id)
 
     const mapping = billingPlanForVariant(Number(attributes.variant_id))
-    const resolved = resolveSubscriptionState({ eventName, attributes, mapping, prior: existingBilling })
+    const resolved = resolveSubscriptionState({ eventName, attributes, mapping, prior: existingBilling, currentPlan: guild.plan_code })
     if (!resolved.planCode || !resolved.billingPeriod) throw new Error('No billing plan mapping')
     if (!mapping && resolved.status !== 'expired') throw new Error('Unknown Lemon Squeezy variant')
 
@@ -189,7 +190,13 @@ export async function POST(request) {
     }
 
     await markEvent(admin, eventKey, { processing_status: 'processed', processed_at: now, error_message: null })
-    return NextResponse.json({ ok: true, plan: resolved.entitlementPlan, status: resolved.status })
+    return NextResponse.json({
+      ok: true,
+      plan: resolved.entitlementPlan,
+      billing_plan: resolved.planCode,
+      payment: resolved.paymentStatus,
+      status: resolved.status,
+    })
   } catch (error) {
     const message = String(error?.message || error || 'Webhook processing failed').slice(0, 500)
     if (admin && eventKey) {
