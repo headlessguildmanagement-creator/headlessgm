@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import ThemeToggle from '../components/theme-toggle'
 import DemoWorkspace from '../components/demo-workspace'
+import { launchPromoReady } from '../lib/billing/promo.mjs'
 
 const plans = [
   {
@@ -54,6 +55,7 @@ const features = [
 ]
 
 export default function Home() {
+  const showLaunchOffer = launchPromoReady()
   return (
     <main className="marketing-page">
       <header className="marketing-nav">
@@ -196,6 +198,7 @@ export default function Home() {
       </section>
 
       <section id="pricing" className="marketing-section marketing-section-alt">
+        {showLaunchOffer ? <div className="launch-marketing-banner"><div><p className="eyebrow">LIMITED · FIRST 30 PAID GUILDS</p><h2>Launch 30: save 20% on your first prepaid 3 months.</h2><p>Pay the first three months upfront. After the introductory term, the launch subscription renews every three months at the standard equivalent price unless cancelled. Limited eligibility and <Link href="/legal/terms">terms apply</Link>.</p></div><Link href="/login" className="button">Claim a launch slot</Link></div> : null}
         <div className="marketing-section-head">
           <p className="eyebrow">Pricing</p>
           <h2>FREE is manual. GUILD automates. COMMANDER adapts.</h2>

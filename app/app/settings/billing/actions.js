@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase/server'
 import { billingSelection, isLemonTestMode } from '../../../../lib/billing/plans.mjs'
 import { billingReturnUrl } from '../../../../lib/billing/url.mjs'
+import { LAUNCH_PROMO_CODE, LAUNCH_PROMO_RESERVATION_MINUTES, launchPromoSelection } from '../../../../lib/billing/promo.mjs'
 
 function safe(value) {
   return encodeURIComponent(String(value || '').slice(0, 220))
@@ -69,6 +70,91 @@ export async function startCheckout(formData) {
     const detail = body?.errors?.[0]?.detail || 'Could not create Lemon Squeezy checkout.'
     redirect(`/${guild.slug}/settings/billing?error=${safe(detail)}`)
   }
+  redirect(checkoutUrl)
+}
+
+
+export async function startLaunchCheckout(formData) {
+  const guildId = String(formData.get('guild_id') || '')
+  const planCode = String(formData.get('plan_code') || '').toLowerCase()
+  const accepted = String(formData.get('launch_terms') || '') === 'accepted'
+  const { supabase, guild, authData, userId } = await ownerContext(guildId)
+
+  if (!accepted) redirect(`/${guild.slug}/settings/billing?error=${safe('Accept the 3-month launch offer terms before checkout.')}`)
+
+  const selection = launchPromoSelection(planCode)
+  if (!selection?.productId || !selection?.variantId || !selection?.discountCode) {
+    redirect(`/${guild.slug}/settings/billing?error=${safe('The launch offer is not configured yet.')}`)
+  }
+
+  const apiKey = process.env.LEMON_SQUEEZY_API_KEY
+  const storeId = String(process.env.LEMON_SQUEEZY_STORE_ID || '').trim()
+  if (!apiKey || !storeId) redirect(`/${guild.slug}/settings/billing?error=${safe('Billing checkout is not configured yet.')}`)
+
+  const { data: existing } = await supabase.from('billing_subscriptions').select('provider_subscription_id,status').eq('guild_id', guild.id).maybeSingle()
+  if (existing?.provider_subscription_id && String(existing.status) !== 'expired') {
+    redirect(`/${guild.slug}/settings/billing?error=${safe('The launch offer is only available before a guild starts a paid subscription.')}`)
+  }
+
+  const { data: redemptionId, error: reserveError } = await supabase.rpc('reserve_billing_promotion', {
+    p_code: LAUNCH_PROMO_CODE,
+    p_guild_id: guild.id,
+    p_plan_code: planCode,
+  })
+  if (reserveError || !redemptionId) {
+    redirect(`/${guild.slug}/settings/billing?error=${safe(reserveError?.message || 'No launch offer slots are currently available.')}`)
+  }
+
+  const email = String(authData?.claims?.email || '').trim()
+  const expiresAt = new Date(Date.now() + LAUNCH_PROMO_RESERVATION_MINUTES * 60 * 1000).toISOString()
+  const response = await fetch('https://api.lemonsqueezy.com/v1/checkouts', {
+    method: 'POST',
+    headers: { Accept: 'application/vnd.api+json', 'Content-Type': 'application/vnd.api+json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      data: {
+        type: 'checkouts',
+        attributes: {
+          product_options: {
+            name: `HeadlessGM ${selection.label} · Launch 30`,
+            description: `Prepay the first 3 months with the Launch 30 discount. Renews every 3 months at the standard equivalent price unless cancelled.`,
+            redirect_url: billingReturnUrl(guild.slug),
+            enabled_variants: [selection.variantId],
+          },
+          checkout_options: { embed: false, media: true, logo: true, desc: true, discount: false, subscription_preview: true },
+          checkout_data: {
+            ...(email ? { email } : {}),
+            discount_code: selection.discountCode,
+            custom: {
+              guild_id: guild.id,
+              user_id: userId,
+              plan_code: planCode,
+              billing_period: 'quarterly',
+              promotion_code: LAUNCH_PROMO_CODE,
+              promotion_redemption_id: String(redemptionId),
+            },
+          },
+          preview: true,
+          expires_at: expiresAt,
+          test_mode: isLemonTestMode(),
+        },
+        relationships: {
+          store: { data: { type: 'stores', id: storeId } },
+          variant: { data: { type: 'variants', id: String(selection.variantId) } },
+        },
+      },
+    }),
+    cache: 'no-store',
+  })
+
+  const body = await response.json().catch(() => null)
+  const checkoutUrl = body?.data?.attributes?.url
+  const discountTotal = Number(body?.data?.attributes?.preview?.discount_total || 0)
+  if (!response.ok || !checkoutUrl || discountTotal <= 0) {
+    await supabase.rpc('release_billing_promotion', { p_redemption_id: redemptionId }).catch(() => null)
+    const detail = body?.errors?.[0]?.detail || (discountTotal <= 0 ? 'The launch discount could not be applied.' : 'Could not create Lemon Squeezy checkout.')
+    redirect(`/${guild.slug}/settings/billing?error=${safe(detail)}`)
+  }
+
   redirect(checkoutUrl)
 }
 

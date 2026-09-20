@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '../../../../lib/supabase/admin'
 import { billingPlanForVariant } from '../../../../lib/billing/plans.mjs'
+import { LAUNCH_PROMO_CODE } from '../../../../lib/billing/promo.mjs'
 import {
   BILLING_WEBHOOK_EVENTS,
   resolveSubscriptionState,
@@ -15,6 +16,7 @@ export const runtime = 'nodejs'
 const supportedEvents = new Set(BILLING_WEBHOOK_EVENTS)
 const subscriptionEvents = new Set(BILLING_WEBHOOK_EVENTS.filter((name) => name.startsWith('subscription_') && !name.startsWith('subscription_payment_')))
 const paymentEvents = new Set(BILLING_WEBHOOK_EVENTS.filter((name) => name.startsWith('subscription_payment_')))
+const PAYMENT_CONFIRMED_EVENTS = new Set(['subscription_payment_success','subscription_payment_recovered'])
 
 function secureEqualHex(a, b) {
   try {
@@ -180,6 +182,51 @@ export async function POST(request) {
 
     const { error: billingError } = await admin.from('billing_subscriptions').upsert(subscriptionRow, { onConflict: 'guild_id' })
     if (billingError) throw billingError
+
+    const promoRedemptionId = String(custom.promotion_redemption_id || '').trim()
+    const promoCode = String(custom.promotion_code || '').trim().toLowerCase()
+    if (PAYMENT_CONFIRMED_EVENTS.has(eventName) && promoCode === LAUNCH_PROMO_CODE && promoRedemptionId) {
+      const { data: redemption, error: redemptionError } = await admin
+        .from('billing_promotion_redemptions')
+        .select('id,guild_id,user_id,status,promotion_code')
+        .eq('id', promoRedemptionId)
+        .maybeSingle()
+      if (redemptionError) throw new Error(`Could not read launch redemption: ${redemptionError.message}`)
+      if (!redemption || redemption.guild_id !== guildId || redemption.promotion_code !== LAUNCH_PROMO_CODE) {
+        throw new Error('Launch promotion redemption does not match this guild')
+      }
+      if (custom.user_id && String(redemption.user_id) !== String(custom.user_id)) {
+        throw new Error('Launch promotion redemption does not match checkout owner')
+      }
+
+      if (redemption.status !== 'redeemed') {
+        const customerId = attributes.customer_id != null ? String(attributes.customer_id) : null
+        if (customerId) {
+          const { data: priorCustomerRedemption, error: customerError } = await admin
+            .from('billing_promotion_redemptions')
+            .select('id')
+            .eq('promotion_code', LAUNCH_PROMO_CODE)
+            .eq('provider_customer_id', customerId)
+            .eq('status', 'redeemed')
+            .neq('id', promoRedemptionId)
+            .maybeSingle()
+          if (customerError) throw new Error(`Could not validate launch customer: ${customerError.message}`)
+          if (priorCustomerRedemption) throw new Error('This billing customer has already used the launch offer')
+        }
+
+        const { error: promoError } = await admin.from('billing_promotion_redemptions').update({
+          status: 'redeemed',
+          reserved_until: null,
+          provider_customer_id: customerId,
+          provider_subscription_id: subscriptionId || null,
+          provider_order_id: attributes.order_id != null ? String(attributes.order_id) : null,
+          paid_at: now,
+          term_ends_at: attributes.renews_at || null,
+          updated_at: now,
+        }).eq('id', promoRedemptionId)
+        if (promoError) throw new Error(`Could not redeem launch offer: ${promoError.message}`)
+      }
+    }
 
     if (resolved.entitlementPlan !== guild.plan_code) {
       const { error: planError } = await admin.from('guilds').update({

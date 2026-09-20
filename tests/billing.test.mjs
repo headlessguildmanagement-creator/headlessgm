@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { billingCatalog, billingPlanForVariant, billingSelection } from '../lib/billing/plans.mjs'
+import { LAUNCH_PROMO_CODE, formatUsd, launchPromoPlanForVariant, launchPromoSelection } from '../lib/billing/promo.mjs'
 import { billingReturnUrl, normalizeAppUrl } from '../lib/billing/url.mjs'
 import {
   BILLING_WEBHOOK_EVENTS,
@@ -219,4 +220,34 @@ test('new paid subscription waits for payment confirmation when current access i
   })
   assert.equal(created.entitlementPlan, 'free')
   assert.equal(created.paymentStatus, 'pending')
+})
+
+
+test('launch offer uses a prepaid three-month price and maps configured quarterly variants', () => {
+  process.env.LEMON_SQUEEZY_GUILD_LAUNCH_PRODUCT_ID = '910001'
+  process.env.LEMON_SQUEEZY_GUILD_LAUNCH_VARIANT_ID = '920001'
+  process.env.LEMON_SQUEEZY_COMMANDER_LAUNCH_PRODUCT_ID = '910002'
+  process.env.LEMON_SQUEEZY_COMMANDER_LAUNCH_VARIANT_ID = '920002'
+  process.env.LEMON_SQUEEZY_LAUNCH_DISCOUNT_CODE = 'LAUNCH30'
+
+  const guild = launchPromoSelection('guild')
+  const commander = launchPromoSelection('commander')
+  assert.equal(LAUNCH_PROMO_CODE, 'launch30')
+  assert.equal(guild.regularQuarterCents, 4797)
+  assert.equal(guild.introQuarterCents, 3838)
+  assert.equal(commander.regularQuarterCents, 7497)
+  assert.equal(commander.introQuarterCents, 5998)
+  assert.equal(formatUsd(guild.introQuarterCents), '$38.38')
+  assert.deepEqual(launchPromoPlanForVariant(920001), {
+    planCode:'guild', billingPeriod:'quarterly', productId:910001, variantId:920001, promotionCode:'launch30'
+  })
+  assert.deepEqual(billingPlanForVariant(920002), {
+    planCode:'commander', billingPeriod:'quarterly', productId:910002, variantId:920002, promotionCode:'launch30'
+  })
+
+  delete process.env.LEMON_SQUEEZY_GUILD_LAUNCH_PRODUCT_ID
+  delete process.env.LEMON_SQUEEZY_GUILD_LAUNCH_VARIANT_ID
+  delete process.env.LEMON_SQUEEZY_COMMANDER_LAUNCH_PRODUCT_ID
+  delete process.env.LEMON_SQUEEZY_COMMANDER_LAUNCH_VARIANT_ID
+  delete process.env.LEMON_SQUEEZY_LAUNCH_DISCOUNT_CODE
 })

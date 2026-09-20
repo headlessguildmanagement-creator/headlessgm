@@ -3,7 +3,8 @@ import AppShell from '../../../../components/app-shell'
 import { createClient } from '../../../../lib/supabase/server'
 import { resolveGuild } from '../../../../lib/guild-context'
 import { billingIntegrationReady, isLemonTestMode } from '../../../../lib/billing/plans.mjs'
-import { changeSubscription, openCustomerPortal, startCheckout } from './actions'
+import { changeSubscription, openCustomerPortal, startCheckout, startLaunchCheckout } from './actions'
+import { LAUNCH_PROMO_CODE, LAUNCH_PROMO_DISCOUNT_PERCENT, formatUsd, launchPromoReady, launchPromoSelection } from '../../../../lib/billing/promo.mjs'
 
 const offers = [
   { planCode:'guild', label:'GUILD', monthly:'$15.99', annual:'$144', copy:'HeadlessGM’s complete standard operating system: automation, organized bidding, recruitment, Discord, history and backup.' },
@@ -21,10 +22,17 @@ export default async function BillingPage({ searchParams }) {
   if (!guild) redirect('/app/onboarding')
   if (guild.owner_user_id !== userId) redirect(`/${guild.slug}/settings?error=Guild%20owner%20access%20required.`)
 
-  const { data: billing } = await supabase.from('billing_subscriptions').select('*').eq('guild_id', guild.id).maybeSingle()
+  const [{ data: billing }, { data: promoStatus }] = await Promise.all([
+    supabase.from('billing_subscriptions').select('*').eq('guild_id', guild.id).maybeSingle(),
+    supabase.rpc('get_billing_promotion_status', { p_code: LAUNCH_PROMO_CODE }),
+  ])
   const ready = billingIntegrationReady()
   const testMode = isLemonTestMode()
   const hasSubscription = Boolean(billing?.provider_subscription_id && billing?.status !== 'expired')
+  const promoReady = launchPromoReady()
+  const promoAvailable = promoReady && promoStatus?.active && Number(promoStatus?.available || 0) > 0 && !hasSubscription
+  const promoGuild = launchPromoSelection('guild')
+  const promoCommander = launchPromoSelection('commander')
   const planRank = (code) => code === 'commander' ? 2 : code === 'guild' ? 1 : 0
   const pendingDowngrade = Boolean(billing?.plan_code && planRank(billing.plan_code) < planRank(guild.plan_code))
   const pendingUpgrade = Boolean(billing?.plan_code && planRank(billing.plan_code) > planRank(guild.plan_code))
@@ -55,6 +63,30 @@ export default async function BillingPage({ searchParams }) {
         {billing?.payment_status === 'failed' ? <div className="notice error">A payment attempt failed. Lemon Squeezy may retry it; access remains until the subscription is confirmed expired.</div> : null}
         {billing?.provider_subscription_id ? <form action={openCustomerPortal} className="operator-actions"><input type="hidden" name="guild_id" value={guild.id}/><button className="button" type="submit">Manage billing / resume / cancel</button></form> : null}
       </section>
+
+
+      {promoAvailable ? <section className="panel panel-pad launch-offer-card">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">LIMITED LAUNCH OFFER</p>
+            <h2>Launch 30 · first 30 paid guilds</h2>
+            <p>Prepay your first 3 months and save {LAUNCH_PROMO_DISCOUNT_PERCENT}%. This offer is limited to new paid guilds and cannot be combined with another promotion.</p>
+          </div>
+          <span className="pill">{Number(promoStatus.available)} SLOT{Number(promoStatus.available) === 1 ? '' : 'S'} LEFT</span>
+        </div>
+        <div className="billing-choice-grid">
+          {[promoGuild,promoCommander].map((offer) => offer ? <form action={startLaunchCheckout} className="panel panel-pad" key={offer.planCode}>
+            <input type="hidden" name="guild_id" value={guild.id}/>
+            <input type="hidden" name="plan_code" value={offer.planCode}/>
+            <p className="eyebrow">{offer.label}</p>
+            <strong>{formatUsd(offer.introQuarterCents)}<small> / first 3 months</small></strong>
+            <p className="muted">Regular 3-month equivalent: {formatUsd(offer.regularQuarterCents)}. After the introductory term, this launch subscription renews every 3 months at the regular equivalent price unless you cancel future renewal.</p>
+            <label className="launch-terms-check"><input type="checkbox" name="launch_terms" value="accepted" required/> <span>I understand this is a prepaid 3-month promotional term, the slot is limited, and the standard <a href="/legal/terms" target="_blank" rel="noreferrer">Terms and refund policy</a> apply.</span></label>
+            <button type="submit" className="button">Claim {offer.label} launch slot</button>
+          </form> : null)}
+        </div>
+        <p className="muted" style={{marginBottom:0}}>A temporary slot reservation lasts 30 minutes while checkout is open. Only a successful paid checkout permanently consumes one of the 30 launch slots.</p>
+      </section> : null}
 
       <div className="pricing-grid">
         {offers.map((offer) => <section className={offer.planCode === 'commander' ? 'pricing-card featured' : 'pricing-card'} key={offer.planCode}>
