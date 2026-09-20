@@ -7,6 +7,7 @@ import {
   resolveSubscriptionState,
   subscriptionIdFromPayload,
   webhookEventKey,
+  webhookFingerprintPayload,
 } from '../../../../lib/billing/lifecycle.mjs'
 
 export const runtime = 'nodejs'
@@ -55,67 +56,96 @@ export async function POST(request) {
   const eventName = String(payload?.meta?.event_name || request.headers.get('x-event-name') || '')
   if (!supportedEvents.has(eventName)) return NextResponse.json({ ok: true, ignored: true })
 
-  const admin = createAdminClient()
-  const payloadHash = createHash('sha256').update(raw).digest('hex')
-  const eventKey = webhookEventKey(eventName, payloadHash)
-  const custom = payload?.meta?.custom_data || {}
-  let subscriptionId = subscriptionIdFromPayload(payload)
-  let guildId = String(custom.guild_id || '').trim()
-  let existingBilling = null
-
-  if (subscriptionId) {
-    const { data } = await admin.from('billing_subscriptions').select('*').eq('provider_subscription_id', subscriptionId).maybeSingle()
-    existingBilling = data
-    if (existingBilling?.guild_id && guildId && existingBilling.guild_id !== guildId) {
-      return NextResponse.json({ error: 'Subscription belongs to a different guild' }, { status: 409 })
-    }
-    if (!guildId) guildId = String(existingBilling?.guild_id || '')
-  }
-
-  if (!guildId) return NextResponse.json({ error: 'Missing guild mapping' }, { status: 400 })
-
-  const { data: guild } = await admin.from('guilds').select('id,owner_user_id,plan_code').eq('id', guildId).maybeSingle()
-  if (!guild) return NextResponse.json({ error: 'Guild not found' }, { status: 404 })
-  if (custom.user_id && String(custom.user_id) !== String(guild.owner_user_id)) {
-    return NextResponse.json({ error: 'Checkout owner does not own this guild' }, { status: 403 })
-  }
-
-  if (!existingBilling) {
-    const { data } = await admin.from('billing_subscriptions').select('*').eq('guild_id', guildId).maybeSingle()
-    existingBilling = data
-    if (!subscriptionId) subscriptionId = String(existingBilling?.provider_subscription_id || '')
-  }
-
-  const resourceType = String(payload?.data?.type || '')
-  const resourceId = String(payload?.data?.id || '')
-  const { error: claimError } = await admin.from('billing_webhook_events').insert({
-    provider: 'lemonsqueezy',
-    event_key: eventKey,
-    event_name: eventName,
-    resource_type: resourceType || null,
-    resource_id: resourceId || null,
-    guild_id: guildId,
-    payload_hash: payloadHash,
-    processing_status: 'processing',
-  })
-
-  if (claimError?.code === '23505') {
-    const { data: priorEvent } = await admin.from('billing_webhook_events').select('processing_status').eq('event_key', eventKey).maybeSingle()
-    if (priorEvent?.processing_status !== 'failed') return NextResponse.json({ ok: true, duplicate: true })
-    await markEvent(admin, eventKey, { processing_status: 'processing', error_message: null, retry_count: 1, received_at: new Date().toISOString() })
-  } else if (claimError) {
-    return NextResponse.json({ error: 'Could not claim webhook event' }, { status: 500 })
-  }
-
+  let admin = null
+  let eventKey = ''
   try {
+    admin = createAdminClient()
+
+    const rawPayloadHash = createHash('sha256').update(raw).digest('hex')
+    const fingerprint = JSON.stringify(webhookFingerprintPayload(payload))
+    const payloadHash = createHash('sha256').update(fingerprint).digest('hex')
+    eventKey = webhookEventKey(eventName, payloadHash)
+    const custom = payload?.meta?.custom_data || {}
+    let subscriptionId = subscriptionIdFromPayload(payload)
+    let guildId = String(custom.guild_id || '').trim()
+    let existingBilling = null
+
+    if (subscriptionId) {
+      const { data, error } = await admin.from('billing_subscriptions').select('*').eq('provider_subscription_id', subscriptionId).maybeSingle()
+      if (error) throw new Error(`Could not read subscription mapping: ${error.message}`)
+      existingBilling = data
+      if (existingBilling?.guild_id && guildId && existingBilling.guild_id !== guildId) {
+        return NextResponse.json({ error: 'Subscription belongs to a different guild' }, { status: 409 })
+      }
+      if (!guildId) guildId = String(existingBilling?.guild_id || '')
+    }
+
+    if (!guildId) return NextResponse.json({ error: 'Missing guild mapping' }, { status: 400 })
+
+    const { data: guild, error: guildError } = await admin.from('guilds').select('id,owner_user_id,plan_code').eq('id', guildId).maybeSingle()
+    if (guildError) throw new Error(`Could not read guild: ${guildError.message}`)
+    if (!guild) return NextResponse.json({ error: 'Guild not found' }, { status: 404 })
+    if (custom.user_id && String(custom.user_id) !== String(guild.owner_user_id)) {
+      return NextResponse.json({ error: 'Checkout owner does not own this guild' }, { status: 403 })
+    }
+
+    if (!existingBilling) {
+      const { data, error } = await admin.from('billing_subscriptions').select('*').eq('guild_id', guildId).maybeSingle()
+      if (error) throw new Error(`Could not read guild billing state: ${error.message}`)
+      existingBilling = data
+      if (!subscriptionId) subscriptionId = String(existingBilling?.provider_subscription_id || '')
+    }
+
+    const resourceType = String(payload?.data?.type || '')
+    const resourceId = String(payload?.data?.id || '')
+    const { error: claimError } = await admin.from('billing_webhook_events').insert({
+      provider: 'lemonsqueezy',
+      event_key: eventKey,
+      event_name: eventName,
+      resource_type: resourceType || null,
+      resource_id: resourceId || null,
+      guild_id: guildId,
+      payload_hash: payloadHash,
+      processing_status: 'processing',
+    })
+
+    if (claimError?.code === '23505') {
+      const { data: priorEvent, error: priorError } = await admin.from('billing_webhook_events').select('processing_status,retry_count').eq('event_key', eventKey).maybeSingle()
+      if (priorError) throw new Error(`Could not read prior webhook event: ${priorError.message}`)
+      if (priorEvent?.processing_status !== 'failed') return NextResponse.json({ ok: true, duplicate: true })
+      await markEvent(admin, eventKey, {
+        processing_status: 'processing',
+        error_message: null,
+        retry_count: Number(priorEvent?.retry_count || 0) + 1,
+        received_at: new Date().toISOString(),
+      })
+    } else if (claimError) {
+      throw new Error(`Could not claim webhook event: ${claimError.message}`)
+    }
+
+    void rawPayloadHash
     let subscriptionData = null
     if (subscriptionEvents.has(eventName) && String(payload?.data?.type || '') === 'subscriptions') {
       subscriptionData = payload.data
-    } else if (subscriptionId) {
+    } else if (!existingBilling && subscriptionId) {
       subscriptionData = await fetchSubscription(subscriptionId)
     }
 
-    const attributes = subscriptionData?.attributes || payload?.data?.attributes || {}
+    const attributes = subscriptionData?.attributes || (
+      existingBilling
+        ? {
+            status: existingBilling.status,
+            customer_id: existingBilling.provider_customer_id,
+            order_id: existingBilling.provider_order_id,
+            product_id: existingBilling.product_id,
+            variant_id: existingBilling.variant_id,
+            test_mode: existingBilling.test_mode,
+            user_email: existingBilling.customer_email,
+            renews_at: existingBilling.renews_at,
+            ends_at: existingBilling.ends_at,
+          }
+        : payload?.data?.attributes || {}
+    )
     if (!subscriptionId && subscriptionData?.id) subscriptionId = String(subscriptionData.id)
 
     const mapping = billingPlanForVariant(Number(attributes.variant_id))
@@ -162,7 +192,9 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, plan: resolved.entitlementPlan, status: resolved.status })
   } catch (error) {
     const message = String(error?.message || error || 'Webhook processing failed').slice(0, 500)
-    await markEvent(admin, eventKey, { processing_status: 'failed', error_message: message })
+    if (admin && eventKey) {
+      try { await markEvent(admin, eventKey, { processing_status: 'failed', error_message: message }) } catch {}
+    }
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

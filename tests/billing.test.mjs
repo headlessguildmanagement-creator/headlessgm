@@ -8,6 +8,7 @@ import {
   resolveSubscriptionState,
   subscriptionIdFromPayload,
   webhookEventKey,
+  webhookFingerprintPayload,
 } from '../lib/billing/lifecycle.mjs'
 
 test('test-mode Lemon Squeezy catalog uses the configured HeadlessGM products', () => {
@@ -133,4 +134,23 @@ test('billing return URL safely falls back when the configured URL is malformed'
     billingReturnUrl('guild-slug', { NEXT_PUBLIC_APP_URL:'not a valid host /' }),
     'https://headlessgm-nu.vercel.app/guild-slug/settings/billing?checkout=success'
   )
+})
+
+
+test('webhook fingerprint ignores Lemon Squeezy resend delivery ids', () => {
+  const first = {
+    data:{ id:'8506552', type:'subscription-invoices', attributes:{ subscription_id:2542160, status:'paid' } },
+    meta:{ event_name:'subscription_payment_success', webhook_id:'delivery-one', custom_data:{ guild_id:'guild-1' } },
+  }
+  const resend = {
+    ...first,
+    meta:{ ...first.meta, webhook_id:'delivery-two' },
+  }
+  assert.deepEqual(webhookFingerprintPayload(first), webhookFingerprintPayload(resend))
+})
+
+test('webhook fingerprint still changes for legitimate subscription state changes', () => {
+  const active = { data:{ id:'sub-1', type:'subscriptions', attributes:{ status:'active', updated_at:'2026-09-20T06:00:00Z' } }, meta:{ event_name:'subscription_updated', webhook_id:'one' } }
+  const cancelled = { data:{ id:'sub-1', type:'subscriptions', attributes:{ status:'cancelled', updated_at:'2026-09-20T07:00:00Z' } }, meta:{ event_name:'subscription_updated', webhook_id:'two' } }
+  assert.notDeepEqual(webhookFingerprintPayload(active), webhookFingerprintPayload(cancelled))
 })
