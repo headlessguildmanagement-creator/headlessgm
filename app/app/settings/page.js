@@ -22,6 +22,7 @@ export default async function SettingsPage({ searchParams }) {
     ['Guild profile', `${guild.name} · /${guild.slug} · ${guild.timezone} · logo · ${guild.plan_code === 'free' ? 'manual attendance' : 'attendance & LOA defaults'}`, withGuild('/app/settings/profile', guild.slug)],
     ['Brand & Overview', guild.plan_code === 'commander' || guild.plan_code === 'beta' ? 'COMMANDER Brand Studio, logo-derived colors, typography and overview modules.' : 'COMMANDER unlocks guild-specific app branding and Overview Studio.', withGuild('/app/settings/brand', guild.slug)],
     ['Auction rules', 'Feather/Puppet allocation presets and reward caps. Custom rules are a COMMANDER feature.', withGuild('/app/settings/auction', guild.slug)],
+    ...(isOwner ? [['Billing', 'Lemon Squeezy subscription, plan, renewal and customer billing portal.', withGuild('/app/settings/billing', guild.slug)]] : []),
     ...(guild.plan_code === 'free' ? [] : [['Discord', 'Server connection, channel selection, reconnect, control panel and character claims.', withGuild('/app/settings/discord', guild.slug)]]),
     ...(guild.plan_code === 'free' ? [] : [['Recruitment', `Public recruitment site /${guild.slug} · applications, applicant conversations and onboarding.`, withGuild('/app/recruitment', guild.slug)]]),
     ['Members', guild.plan_code === 'free' ? 'Manual roster entry and member status. File import unlocks on GUILD.' : 'Roster import, identity links and member status.', withGuild('/app/members', guild.slug)],
