@@ -48,7 +48,6 @@ export async function provisionDiscordWorkspace(formData) {
 
     const channels = await provisionHeadlessGMChannels(discordGuildId)
     await registerAuctionProofCommand(discordGuildId)
-    await registerAuctionProofCommand(discordGuildId)
     const { error } = await supabase.from('discord_connections').upsert({
       guild_id: guildId,
       discord_guild_id: discordGuild.id,
