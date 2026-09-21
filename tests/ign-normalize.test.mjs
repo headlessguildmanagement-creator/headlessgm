@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeIgn, uniqueIgnMatch } from '../lib/ign-normalize.mjs'
+import { extractIgnFromProofMessage, normalizeIgn, uniqueIgnMatch } from '../lib/ign-normalize.mjs'
 
 test('IGN normalization handles case, width, punctuation and non-Latin prefixes', () => {
   for (const value of ['汉字OZAWA', 'OZAWA', 'Ozawa', 'ozawa', 'ＯＺＡＷＡ', 'O-ZAWA', 'O_ZAWA']) {
@@ -32,4 +32,10 @@ test('IGN matching rejects values without a Latin or numeric matching key', () =
     member:null,
     ambiguous:false,
   })
+})
+
+test('Discord proof message parser requires an IGN label and preserves the submitted IGN', () => {
+  assert.equal(extractIgnFromProofMessage('IGN: 汉字OZAWA\nproof below'), '汉字OZAWA')
+  assert.equal(extractIgnFromProofMessage('ign: Ozawa'), 'Ozawa')
+  assert.equal(extractIgnFromProofMessage('here is my proof'), '')
 })
