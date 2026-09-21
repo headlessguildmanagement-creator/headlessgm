@@ -78,6 +78,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
             <div className="muted">{connection.metadata?.channel_name ? `Control channel: #${connection.metadata.channel_name}` : 'No control channel selected.'}</div>
             {connection.metadata?.recruitment_channel_name ? <div className="muted">Recruitment channel: #{connection.metadata.recruitment_channel_name}</div> : null}
             {connection.metadata?.officer_ops_channel_name ? <div className="muted">Officer operations: #{connection.metadata.officer_ops_channel_name}</div> : null}
+            {connection.metadata?.auction_proof_channel_name ? <div className="muted">Auction proof: #{connection.metadata.auction_proof_channel_name} · use /auction-proof</div> : null}
           </div>
         ) : null}
 
@@ -97,7 +98,7 @@ export default async function DiscordSettingsPage({ searchParams }) {
 
                 <div className="notice" style={{ marginBottom: 14 }}>
                   <strong>Recommended setup</strong>
-                  <div className="muted">Create a <strong>HEADLESSGM</strong> category with <strong>#headlessgm</strong>, <strong>#recruitment</strong> and <strong>#officer-ops</strong>, connect the control channel, and publish the member panel automatically.</div>
+                  <div className="muted">Create a <strong>HEADLESSGM</strong> category with <strong>#headlessgm</strong>, <strong>#recruitment</strong>, <strong>#officer-ops</strong> and <strong>#auction-proof</strong>. HeadlessGM also registers <strong>/auction-proof</strong> for IGN + screenshot proof.</div>
                 </div>
 
                 <form action={provisionDiscordWorkspace} style={{ marginBottom: 14 }}>
