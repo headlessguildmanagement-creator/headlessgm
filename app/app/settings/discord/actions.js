@@ -130,11 +130,14 @@ export async function reconnectDiscord(formData) {
   let destination
   try {
     await requireOwnerGuild(supabase, guildId, userId)
-    const { error } = await supabase.from('discord_connections').delete().eq('guild_id', guildId)
+    const { error } = await supabase.from('discord_connections').update({
+      bot_installed: false,
+      updated_at: new Date().toISOString(),
+    }).eq('guild_id', guildId)
     if (error) throw error
     revalidatePath('/app')
     revalidatePath('/app/settings/discord')
-    destination = `/app/settings/discord?success=${safeMessage('Discord connection cleared. Choose the new Discord server and channel below.')}`
+    destination = `/app/settings/discord?success=${safeMessage('Choose the new Discord server and channel below. The previous destination is retained until the replacement is saved.')}`
   } catch (error) {
     destination = `/app/settings/discord?error=${safeMessage(error.message || 'Could not reset Discord connection')}`
   }
