@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { extractIgnFromProofMessage, normalizeIgn, uniqueIgnMatch } from '../lib/ign-normalize.mjs'
 
 test('IGN normalization handles case, width, punctuation and non-Latin prefixes', () => {
-  for (const value of ['汉字OZAWA', 'OZAWA', 'Ozawa', 'ozawa', 'ＯＺＡＷＡ', 'O-ZAWA', 'O_ZAWA']) {
+  for (const value of ['汉字OZAWA', 'OZAWA', 'Ozawa', 'ozawa', 'ＯＺＡＷＡ', 'O-ZAWA', 'O_ZAWA', 'ØZAWA']) {
     assert.equal(normalizeIgn(value), 'ozawa')
   }
 })
