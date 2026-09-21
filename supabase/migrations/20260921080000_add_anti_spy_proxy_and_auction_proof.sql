@@ -3,6 +3,19 @@
 create schema if not exists private;
 
 -- One real identity may belong to only one active guild at a time.
+-- Database-level uniqueness is the final anti-spy backstop.
+-- Historical/inactive roster records may share old identities; only active access is unique.
+create unique index if not exists guild_members_one_active_discord_identity
+  on public.guild_members(discord_user_id)
+  where status='active' and discord_user_id is not null;
+
+create unique index if not exists guild_users_one_guild_per_account
+  on public.guild_users(user_id);
+
+create unique index if not exists guilds_one_owned_guild_per_account
+  on public.guilds(owner_user_id)
+  where owner_user_id is not null;
+
 create or replace function private.enforce_single_active_member_identity()
 returns trigger
 language plpgsql
@@ -50,6 +63,47 @@ create trigger guild_members_single_active_identity
 before insert or update of status, discord_user_id, guild_id
 on public.guild_members
 for each row execute function private.enforce_single_active_member_identity();
+
+create or replace function private.revoke_departed_member_management_access()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public','auth','private','pg_temp'
+as $function$
+declare
+  v_user_id uuid;
+  v_discord_id text;
+begin
+  if old.status='active' and new.status<>'active' then
+    v_discord_id:=old.discord_user_id;
+  elsif old.discord_user_id is distinct from new.discord_user_id then
+    v_discord_id:=old.discord_user_id;
+  end if;
+
+  if v_discord_id is null then return new; end if;
+
+  select i.user_id into v_user_id
+  from auth.identities i
+  where i.provider='discord' and i.provider_id=v_discord_id
+  order by i.created_at desc
+  limit 1;
+
+  if v_user_id is not null then
+    delete from public.guild_users gu
+    where gu.guild_id=new.guild_id
+      and gu.user_id=v_user_id
+      and gu.role<>'owner';
+  end if;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists guild_members_revoke_departed_access on public.guild_members;
+create trigger guild_members_revoke_departed_access
+after update of status, discord_user_id
+on public.guild_members
+for each row execute function private.revoke_departed_member_management_access();
 
 create or replace function private.enforce_single_guild_user()
 returns trigger
