@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '../../../../../lib/supabase/server'
 import AppShell from '../../../../../components/app-shell'
-import { finalizeAuction, generateAuctionDraft, publishAuction, setPuppetCannotBid, setFeatherExclusion, setPuppetCycleComplete, decidePuppetAppeal, publishTentativeBidders } from './actions'
+import { finalizeAuction, generateAuctionDraft, publishAuction, setPuppetCannotBid, setFeatherExclusion, setPuppetCycleComplete, decidePuppetAppeal, publishTentativeBidders, setAuctionTransferPassword, setAuctionProxyBidder } from './actions'
 import { havocFeatherGroupForInstant } from '../../../../../lib/havoc-rules.mjs'
 import { isPuppet96hPenalty } from '../../../../../lib/puppet-engine.mjs'
 
@@ -44,7 +44,14 @@ export default async function AuctionPage({ params, searchParams }) {
 
   const currentCycle = Number(puppetState?.current_cycle || 1)
   const { data: progress } = await supabase.from('puppet_cycle_progress').select('guild_member_id,completed_at,turn_kind').eq('guild_id', guild.id).eq('cycle', currentCycle)
-  const { data: allocations } = run ? await supabase.from('auction_allocations').select('*').eq('auction_run_id', run.id).order('category').order('quantity', { ascending: false }) : { data: [] }
+  const [{ data: allocations }, { data: proxies }, { data: proofs }, { data: transferPasswordConfigured }] = run
+    ? await Promise.all([
+        supabase.from('auction_allocations').select('*').eq('auction_run_id', run.id).order('category').order('quantity', { ascending: false }),
+        supabase.from('auction_bidder_proxies').select('*').eq('auction_run_id', run.id),
+        supabase.from('auction_bid_proofs').select('*').eq('auction_run_id', run.id).order('submitted_at'),
+        supabase.rpc('guild_transfer_password_configured', { p_guild_id: guild.id }),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: false }]
 
   const memberMap = new Map((members || []).map((member) => [member.id, member]))
   const unavailable = new Set([...(loas || []).map((x) => x.guild_member_id), ...(absences || []).map((x) => x.guild_member_id)])
@@ -65,6 +72,11 @@ export default async function AuctionPage({ params, searchParams }) {
   const pendingAppeals = (appeals || []).filter((appeal) => appeal.status === 'pending')
   const approvedAppeals = (appeals || []).filter((appeal) => appeal.status === 'approved')
   const deferredIds = new Set((deferred || []).map((row) => row.guild_member_id))
+  const proxyMap = new Map((proxies || []).map((row) => [row.allocation_id, row]))
+  const proofByMember = new Map((proofs || []).map((row) => [row.bidder_member_id, row]))
+  const effectiveBidderIds = [...new Set((allocations || []).map((row) => proxyMap.get(row.id)?.bidder_member_id || row.guild_member_id))]
+  const submittedBidderIds = effectiveBidderIds.filter((memberId) => proofByMember.has(memberId))
+  const missingBidderIds = effectiveBidderIds.filter((memberId) => !proofByMember.has(memberId))
 
   return (
     <AppShell guildName={guild.name} guildSlug={guild.slug} eyebrow="AUCTION COMMAND" title={`${event.name} · Auction`} activeHref="/app/events" actions={<Link href={`/${guild.slug}/events/${id}`} className="button ghost">Back to event</Link>}>
@@ -131,7 +143,51 @@ export default async function AuctionPage({ params, searchParams }) {
       {run ? <>
         {featherDistribution ? <section className="panel panel-pad"><div className="section-head"><div><h2>Feather fairness calculation</h2><p>Combined equal rounds first; remaining boxes go through persistent officer excess rotation without breaking caps.</p></div><span className="pill">{featherDistribution.bidder_count} BIDDERS</span></div><div className="event-readiness-strip"><div><small>Regular total</small><strong>{featherDistribution.equal_combined_total ?? 'Varies'}</strong></div><div><small>Officer excess L/D</small><strong>{featherDistribution.officer_excess_ld || 0}</strong></div><div><small>Officer excess T/S</small><strong>{featherDistribution.officer_excess_ts || 0}</strong></div><div><small>Next officer pointer</small><strong>{Number(run.generated_output?.officer_rotation_next ?? 0)+1}</strong></div></div></section> : null}
         {puppetSelection ? <section className="panel panel-pad"><div className="section-head"><div><h2>Puppet draft summary</h2><p>Old-cycle make-ups and approved appeals do not consume a member's normal current-cycle turn.</p></div><span className="pill">CYCLE {puppetSelection.current_cycle}</span></div><div className="event-readiness-strip"><div><small>Deferred make-ups</small><strong>{puppetSelection.counts?.deferred || 0}</strong></div><div><small>Appeals</small><strong>{puppetSelection.counts?.appeal || 0}</strong></div><div><small>Current-cycle</small><strong>{puppetSelection.counts?.normal || 0}</strong></div><div><small>Rollover</small><strong>{puppetSelection.counts?.rollover || 0}</strong></div></div></section> : null}
-        <section className="panel"><div className="panel-pad section-head"><div><h2>Generated assignments</h2><p>Draft output is frozen until an officer regenerates it.</p></div><span className="pill">{(allocations||[]).length} ROWS</span></div><div className="table-wrap" style={{border:0,borderRadius:0}}><table><thead><tr><th>Reward</th><th>Member</th><th>Qty</th><th>Source</th></tr></thead><tbody>{(allocations||[]).map((row)=><tr key={row.id}><td>{labels[row.category]||row.category}</td><td><strong>{memberMap.get(row.guild_member_id)?.ign||'Unknown'}</strong></td><td>{row.quantity}</td><td>{row.source.replaceAll('_',' ')}{row.metadata?.turn_kind ? ` · ${row.metadata.turn_kind.replaceAll('_',' ')}` : ''}</td></tr>)}{!allocations?.length?<tr><td colSpan="4" className="muted">No fixed assignments in this draft.</td></tr>:null}</tbody></table></div></section>
+        <section className="panel">
+          <div className="panel-pad section-head"><div><h2>Generated assignments</h2><p>The original rights owner stays in the audit trail. A Give / Proxy replacement changes only the bidder shown on the final published list and must be completed before publication.</p></div><span className="pill">{(allocations||[]).length} ROWS</span></div>
+          {run.status === 'draft' ? <div className="panel-pad" style={{paddingTop:0}}>
+            <div className="notice"><strong>Internal Give / Proxy password:</strong> {transferPasswordConfigured ? 'configured' : 'not configured yet'}. Only the guild owner can set or replace it.</div>
+            {guild.owner_user_id === userId ? <form action={setAuctionTransferPassword} className="inline-action" style={{marginTop:12}}>
+              <input type="hidden" name="event_id" value={id}/>
+              <input type="password" name="transfer_password" minLength="4" maxLength="64" required placeholder={transferPasswordConfigured ? 'Replace transfer password' : 'Set transfer password'}/>
+              <button className="button ghost" type="submit">{transferPasswordConfigured ? 'Replace password' : 'Set password'}</button>
+            </form> : null}
+          </div> : null}
+          <div className="table-wrap" style={{border:0,borderRadius:0}}><table><thead><tr><th>Reward</th><th>Rights owner</th><th>Published bidder</th><th>Qty</th><th>Source</th>{run.status==='draft'?<th>Give / Proxy</th>:null}</tr></thead><tbody>
+            {(allocations||[]).map((row)=>{
+              const proxy=proxyMap.get(row.id)
+              const effectiveId=proxy?.bidder_member_id || row.guild_member_id
+              return <tr key={row.id}>
+                <td>{labels[row.category]||row.category}</td>
+                <td><strong>{memberMap.get(row.guild_member_id)?.ign||'Unknown'}</strong></td>
+                <td><strong>{memberMap.get(effectiveId)?.ign||'Unknown'}</strong>{proxy ? <div className="muted">Proxy / gifted bidding right</div> : null}</td>
+                <td>{row.quantity}</td>
+                <td>{row.source.replaceAll('_',' ')}{row.metadata?.turn_kind ? ` · ${row.metadata.turn_kind.replaceAll('_',' ')}` : ''}</td>
+                {run.status==='draft'?<td><form action={setAuctionProxyBidder} className="inline-action">
+                  <input type="hidden" name="event_id" value={id}/><input type="hidden" name="allocation_id" value={row.id}/>
+                  <select name="bidder_member_id" defaultValue={effectiveId}>{(members||[]).map((member)=><option value={member.id} key={member.id}>{member.ign}</option>)}</select>
+                  <input type="password" name="transfer_password" required placeholder="Transfer password"/>
+                  <button className="button ghost" type="submit">{proxy ? 'Update' : 'Give / Proxy'}</button>
+                </form></td>:null}
+              </tr>
+            })}
+            {!allocations?.length?<tr><td colSpan={run.status==='draft'?6:5} className="muted">No fixed assignments in this draft.</td></tr>:null}
+          </tbody></table></div>
+        </section>
+        {run.status !== 'draft' && effectiveBidderIds.length ? <section className="panel panel-pad">
+          <div className="section-head"><div><h2>Auction screenshot proof</h2><p>Discord proof must use the IGN shown on the published bidding list. HeadlessGM records only proof status and Discord audit identifiers; screenshot files are not stored.</p></div><span className="pill">{submittedBidderIds.length}/{effectiveBidderIds.length} SUBMITTED</span></div>
+          <div className="event-readiness-strip">
+            <div><small>Submitted</small><strong>{submittedBidderIds.length}</strong></div>
+            <div><small>Missing</small><strong>{missingBidderIds.length}</strong></div>
+          </div>
+          <div className="table-wrap" style={{marginTop:16}}><table><thead><tr><th>Published bidder</th><th>Proof</th><th>Submitted</th></tr></thead><tbody>
+            {effectiveBidderIds.map((memberId)=>{
+              const proof=proofByMember.get(memberId)
+              return <tr key={memberId}><td><strong>{memberMap.get(memberId)?.ign||'Unknown'}</strong></td><td><span className="pill">{proof?'SUBMITTED':'MISSING'}</span></td><td>{proof?new Date(proof.submitted_at).toLocaleString():'—'}</td></tr>
+            })}
+          </tbody></table></div>
+          {missingBidderIds.length ? <div className="notice error" style={{marginTop:16}}><strong>Missing screenshot proof:</strong> {missingBidderIds.map((memberId)=>memberMap.get(memberId)?.ign||'Unknown').join(', ')}</div> : <div className="notice success" style={{marginTop:16}}>All published bidders have submitted proof.</div>}
+        </section> : null}
         {Object.keys(ffa).length ? <section className="panel panel-pad"><div className="section-head"><div><h2>FFA categories</h2><p>Eligible bidder lists are frozen with this run and caps remain enforceable.</p></div></div><div className="ops-list">{Object.entries(ffa).map(([category,info])=>info?.quantity>0?<div className="ops-row" key={category}><strong>{labels[category]||category}</strong><p>{info.quantity} available · {info.eligible_member_ids?.length||0} eligible bidders · cap {info.cap??'unlimited'}</p><span>FFA</span></div>:null)}</div></section>:null}
         {Object.values(run.generated_output?.unassigned||{}).some((value)=>Number(value)>0)?<div className="notice error">Some quantities remain unassigned because the eligible regular/officer pools reached the configured caps or no eligible bidder remained.</div>:null}
         {Object.keys(randomOrders).length ? <section className="panel panel-pad"><div className="section-head"><div><h2>Random draw audit</h2><p>The randomized order is frozen with this draft. Review and publish never rerandomize it.</p></div></div><div className="ops-list">{Object.entries(randomOrders).map(([category,ids])=><div className="ops-row" key={category}><strong>{labels[category]||category}</strong><p>{(ids||[]).map((memberId)=>memberMap.get(memberId)?.ign||'Unknown').join(' → ')||'No eligible bidders'}</p><span>FROZEN</span></div>)}</div></section>:null}

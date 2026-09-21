@@ -15,6 +15,11 @@ export default async function MemberPortalPage({ searchParams }) {
   if (authError || !authData?.claims?.sub) redirect(`/login?next=${encodeURIComponent(`/app/member?guild=${guildId}`)}`)
   if (!guildId) redirect('/app')
 
+  const { data: activeMember, error: activeMemberError } = await supabase.rpc('get_my_active_guild_member', { p_guild_id: guildId })
+  if (activeMemberError || !activeMember) {
+    return <main className="member-portal"><div className="member-portal-wrap"><h1>Member access ended</h1><p>You are no longer an active member of this guild. Historical guild records are preserved, but former members cannot use the management portal.</p></div></main>
+  }
+
   const { data: portal, error } = await supabase.rpc('get_my_guild_portal', { p_guild_id: guildId })
   if (error) return <main className="member-portal"><div className="member-portal-wrap"><h1>Member portal</h1><p>{error.message}</p></div></main>
 
