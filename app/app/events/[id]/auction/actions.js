@@ -235,6 +235,41 @@ export async function decidePuppetAppeal(formData) {
   redirect(url)
 }
 
+export async function setAuctionTransferPassword(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const password = String(formData.get('transfer_password') || '')
+  let url = `/app/events/${eventId}/auction`
+  try {
+    const { supabase, guild, userId } = await context(eventId)
+    if (guild.owner_user_id !== userId) throw new Error('Only the guild owner can set the internal transfer password')
+    const { error } = await supabase.rpc('set_guild_transfer_password', { p_guild_id: guild.id, p_password: password })
+    if (error) throw error
+    revalidatePath(`/app/events/${eventId}/auction`)
+    url += `?success=${safe('Internal Give / Proxy password updated.')}`
+  } catch (error) { url += `?error=${safe(error.message || 'Could not update transfer password.')}` }
+  redirect(url)
+}
+
+export async function setAuctionProxyBidder(formData) {
+  const eventId = String(formData.get('event_id') || '')
+  const allocationId = String(formData.get('allocation_id') || '')
+  const bidderMemberId = String(formData.get('bidder_member_id') || '')
+  const password = String(formData.get('transfer_password') || '')
+  let url = `/app/events/${eventId}/auction`
+  try {
+    const { supabase } = await context(eventId)
+    const { error } = await supabase.rpc('set_auction_proxy_bidder', {
+      p_allocation_id: allocationId,
+      p_bidder_member_id: bidderMemberId,
+      p_password: password,
+    })
+    if (error) throw error
+    revalidatePath(`/app/events/${eventId}/auction`)
+    url += `?success=${safe('Published bidder updated for this draft. The original bidding-right owner remains in the audit trail.')}`
+  } catch (error) { url += `?error=${safe(error.message || 'Could not update the proxy bidder.')}` }
+  redirect(url)
+}
+
 export async function publishTentativeBidders(formData) {
   const eventId = String(formData.get('event_id') || '')
   let url = `/app/events/${eventId}/auction`
@@ -267,15 +302,22 @@ export async function publishAuction(formData) {
   let url = `/app/events/${eventId}/auction`
   try {
     const { supabase, event } = await context(eventId)
-    const [{ data: run }, { data: allocations }, { data: members }, { data: connection }] = await Promise.all([
+    const [{ data: run }, { data: allocations }, { data: members }, { data: connection }, { data: proxies }] = await Promise.all([
       supabase.from('auction_runs').select('id,status,input_data,generated_output,rules_snapshot').eq('id', runId).eq('event_id', eventId).single(),
-      supabase.from('auction_allocations').select('guild_member_id,category,quantity,source,metadata').eq('auction_run_id', runId).order('category'),
+      supabase.from('auction_allocations').select('id,guild_member_id,category,quantity,source,metadata').eq('auction_run_id', runId).order('category'),
       supabase.from('guild_members').select('id,ign').eq('guild_id', event.guild_id),
       supabase.from('discord_connections').select('metadata').eq('guild_id', event.guild_id).maybeSingle(),
+      supabase.from('auction_bidder_proxies').select('allocation_id,bidder_member_id,original_member_id').eq('auction_run_id', runId),
     ])
     if (run.status !== 'draft') throw new Error('Only draft auctions can be published')
     const memberMap = new Map((members || []).map((m) => [m.id, m.ign]))
-    const lines = (allocations || []).slice(0, 45).map((row) => `• ${row.category.replaceAll('_',' ')} — **${memberMap.get(row.guild_member_id) || 'Unknown'}** × ${row.quantity}${row.source === 'officer_excess' ? ' · OFFICER EXCESS' : row.metadata?.turn_kind === 'rollover' ? ' · NEXT CYCLE' : row.metadata?.turn_kind === 'deferred' ? ' · MAKE-UP' : row.metadata?.turn_kind === 'appeal' ? ' · APPEAL' : ''}`)
+    const proxyMap = new Map((proxies || []).map((row) => [row.allocation_id, row]))
+    const lines = (allocations || []).slice(0, 45).map((row) => {
+      const proxy = proxyMap.get(row.id)
+      const publishedMemberId = proxy?.bidder_member_id || row.guild_member_id
+      const proxyNote = proxy ? ` · PROXY FOR ${memberMap.get(row.guild_member_id) || 'Unknown'}` : ''
+      return `• ${row.category.replaceAll('_',' ')} — **${memberMap.get(publishedMemberId) || 'Unknown'}** × ${row.quantity}${proxyNote}${row.source === 'officer_excess' ? ' · OFFICER EXCESS' : row.metadata?.turn_kind === 'rollover' ? ' · NEXT CYCLE' : row.metadata?.turn_kind === 'deferred' ? ' · MAKE-UP' : row.metadata?.turn_kind === 'appeal' ? ' · APPEAL' : ''}`
+    })
     const ffa = run.generated_output?.ffa || {}
     for (const [category, info] of Object.entries(ffa)) if (info?.quantity > 0) lines.push(`• ${category.replaceAll('_',' ')} — FFA · ${info.quantity} available · cap ${info.cap ?? 'unlimited'}`)
     const channelId = connection?.metadata?.channel_id
