@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '../../../../lib/supabase/server'
-import { listBotGuilds, listGuildTextChannels, provisionHeadlessGMChannels, sendChannelMessage, publishHeadlessGMControlPanel as publishDiscordControlPanel } from '../../../../lib/discord/server'
+import { listBotGuilds, listGuildTextChannels, provisionHeadlessGMChannels, registerAuctionProofCommand, sendChannelMessage, publishHeadlessGMControlPanel as publishDiscordControlPanel } from '../../../../lib/discord/server'
 
 function safeMessage(value) {
   return encodeURIComponent(String(value || '').slice(0, 180))
@@ -47,6 +47,8 @@ export async function provisionDiscordWorkspace(formData) {
     if (!discordGuild) throw new Error('HeadlessGM is not installed in that Discord server')
 
     const channels = await provisionHeadlessGMChannels(discordGuildId)
+    await registerAuctionProofCommand(discordGuildId)
+    await registerAuctionProofCommand(discordGuildId)
     const { error } = await supabase.from('discord_connections').upsert({
       guild_id: guildId,
       discord_guild_id: discordGuild.id,
@@ -61,6 +63,8 @@ export async function provisionDiscordWorkspace(formData) {
         recruitment_channel_name: channels.recruitment.name,
         officer_ops_channel_id: channels.officerOps.id,
         officer_ops_channel_name: channels.officerOps.name,
+        auction_proof_channel_id: channels.auctionProof.id,
+        auction_proof_channel_name: channels.auctionProof.name,
         provisioned_by_headlessgm: true,
       },
       updated_at: new Date().toISOString(),
@@ -70,7 +74,7 @@ export async function provisionDiscordWorkspace(formData) {
     await publishDiscordControlPanel(channels.control.id, guildId, discordGuild.name)
     revalidatePath('/app')
     revalidatePath('/app/settings/discord')
-    destination = `/app/settings/discord?success=${safeMessage('Created HEADLESSGM category, #headlessgm, #recruitment and #officer-ops, then published the member control panel.')}`
+    destination = `/app/settings/discord?success=${safeMessage('Created HEADLESSGM channels including #auction-proof, registered /auction-proof, and published the member control panel.')}`
   } catch (error) {
     const message = error?.message || 'Could not create Discord channels'
     destination = `/app/settings/discord?error=${safeMessage(message.includes('Missing Permissions') ? 'Discord denied channel creation. Reconnect/install HeadlessGM with Manage Channels permission, then try again.' : message)}`
@@ -94,6 +98,7 @@ export async function saveDiscordConnection(formData) {
     const channels = await listGuildTextChannels(discordGuildId)
     const channel = channels.find((item) => item.id === channelId)
     if (!channel) throw new Error('Selected Discord channel is not available to HeadlessGM')
+    await registerAuctionProofCommand(discordGuildId)
 
     const { error } = await supabase.from('discord_connections').upsert({
       guild_id: guildId,
@@ -101,7 +106,12 @@ export async function saveDiscordConnection(formData) {
       discord_guild_name: discordGuild.name,
       installed_by_user_id: userId,
       bot_installed: true,
-      metadata: { channel_id: channel.id, channel_name: channel.name },
+      metadata: {
+        channel_id: channel.id,
+        channel_name: channel.name,
+        auction_proof_channel_id: channel.id,
+        auction_proof_channel_name: channel.name,
+      },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'guild_id' })
     if (error) throw error
