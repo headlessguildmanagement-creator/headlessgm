@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import nacl from 'tweetnacl'
 import { createAdminClient } from '../../../../lib/supabase/admin'
-import { uniqueIgnMatch } from '../../../../lib/ign-normalize.mjs'
+import { extractIgnFromProofMessage, uniqueIgnMatch } from '../../../../lib/ign-normalize.mjs'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,7 +83,7 @@ function isScreenshotAttachment(attachment) {
   return type.startsWith('image/') || /\.(png|jpe?g|webp|gif)$/i.test(filename)
 }
 
-async function handleAuctionProof(interaction) {
+async function handleAuctionProof(interaction, supplied = {}) {
   const resolved = await resolveConnectedGuild(interaction.guild_id)
   if (resolved.error) return ephemeral(resolved.error)
   const { admin, guild, connection } = resolved
@@ -94,9 +94,9 @@ async function handleAuctionProof(interaction) {
     return ephemeral(`Submit auction proof in ${label}.`)
   }
 
-  const ign = String(commandOption(interaction, 'ign') || '').trim()
+  const ign = String(supplied.ign || commandOption(interaction, 'ign') || '').trim()
   const attachmentId = String(commandOption(interaction, 'screenshot') || '')
-  const attachment = interaction.data?.resolved?.attachments?.[attachmentId]
+  const attachment = supplied.attachment || interaction.data?.resolved?.attachments?.[attachmentId]
   if (!ign) return ephemeral('IGN is required. Use the IGN shown on the published bidding list.')
   if (!attachment || !isScreenshotAttachment(attachment)) return ephemeral('Attach a screenshot image to submit auction proof.')
 
@@ -164,6 +164,16 @@ export async function POST(request) {
 
   if (interaction.type === 2 && interaction.data?.name === 'auction-proof') {
     return handleAuctionProof(interaction)
+  }
+
+  if (interaction.type === 2 && interaction.data?.type === 3 && interaction.data?.name === 'Submit Auction Proof') {
+    const targetId = String(interaction.data?.target_id || '')
+    const message = interaction.data?.resolved?.messages?.[targetId]
+    const ign = extractIgnFromProofMessage(message?.content)
+    const attachment = (message?.attachments || []).find((item) => isScreenshotAttachment(item))
+    if (!ign) return ephemeral('Your message must include a line like IGN: YourName before it can be used as auction proof.')
+    if (!attachment) return ephemeral('Your proof message must include a screenshot image attachment.')
+    return handleAuctionProof(interaction, { ign, attachment })
   }
 
   if (interaction.type === 3) {
