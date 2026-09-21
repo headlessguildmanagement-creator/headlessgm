@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '../../../lib/supabase/server'
+import { normalizeIgn } from '../../../lib/ign-normalize.mjs'
 
 function safe(value) { return encodeURIComponent(String(value || '').slice(0, 220)) }
-function norm(value) { return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') }
+function norm(value) { return normalizeIgn(value) }
 
 async function getAuthenticatedGuild(supabase, guildId) {
   const { data: authData, error: authError } = await supabase.auth.getClaims()
